@@ -1,3 +1,12 @@
+/**
+ * @file ObjectAllocator.cpp
+ * @author Edgar Jose Donoso Mansilla (e.donosomansilla)
+ * @course CS280
+ * @term Spring 2025
+ *
+ * @brief Implementation for a basic memory manager
+ */
+
 //---------------------------------------------------------------------------
 #ifndef OBJECTALLOCATORH
 #define OBJECTALLOCATORH
@@ -197,8 +206,8 @@ struct MemBlockInfo {
 class ObjectAllocator {
 public:
   // Defined by the client (pointer to a block, size of block)
-  typedef void (*DUMPCALLBACK)(const void *, size_t); //!< Callback function when dumping memory leaks
-  typedef void (*VALIDATECALLBACK)(const void *, size_t); //!< Callback function when validating blocks
+  using DUMPCALLBACK = void (*)(const void *, size_t); //!< Callback function when dumping memory leaks
+  using VALIDATECALLBACK = void (*)(const void *, size_t); //!< Callback function when validating blocks
 
   // Predefined values for memory signatures
   static const unsigned char UNALLOCATED_PATTERN = 0xAA; //!< New memory never given to the client
