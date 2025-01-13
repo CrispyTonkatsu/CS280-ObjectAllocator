@@ -259,6 +259,8 @@ private:
   GenericObject *FreeList_; //!< the beginning of the list of objects
 
   // Lots of other private stuff...
+  OAConfig config;
+  OAStats stats;
 };
 
 #endif
