@@ -12,6 +12,7 @@
 #define OBJECTALLOCATORH
 //---------------------------------------------------------------------------
 
+#include <cstdint>
 #include <string>
 
 // If the client doesn't specify these:
@@ -253,14 +254,30 @@ public:
   // Prevent copy construction and assignment
   ObjectAllocator(const ObjectAllocator &oa) = delete; //!< Do not implement!
   ObjectAllocator &operator=(const ObjectAllocator &oa) = delete; //!< Do not implement!
+
 private:
   // Some "suggested" members (only a suggestion!)
-  GenericObject *PageList_; //!< the beginning of the list of pages
-  GenericObject *FreeList_; //!< the beginning of the list of objects
+  GenericObject *page_list; //!< the beginning of the list of pages
+  GenericObject *free_blocks_list; //!< the beginning of the list of objects
 
   // Lots of other private stuff...
+  size_t object_size;
   OAConfig config;
+  size_t page_size;
+
   OAStats stats;
+
+  // Private Methods
+
+  // TODO: Implement this
+  void *cpp_mem_manager_allocate(const char *label);
+  // TODO: Implement this
+  void cpp_mem_manager_free(void *object);
+
+  // TODO: Implement this
+  void *custom_mem_manager_allocate(const char *label);
+  // TODO: Implement this
+  void custom_mem_manager_free(void *object);
 };
 
 #endif
