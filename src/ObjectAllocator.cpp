@@ -132,9 +132,11 @@ size_t ObjectAllocator::calculate_inter_alignment_size() const {
 }
 
 size_t ObjectAllocator::calculate_page_size() const {
-  size_t total = 4 + config.LeftAlignSize_;
+  size_t total = sizeof(void *) + config.LeftAlignSize_;
   total += config.ObjectsPerPage_ * (get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size);
   total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
+
+  std::cout << total << std::endl;
 
   return total;
 }
