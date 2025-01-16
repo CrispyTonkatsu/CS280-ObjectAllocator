@@ -14,3 +14,5 @@ add_compile_options(-O -Werror -Wall -Wextra -Wconversion -std=c++14 -pedantic)
 
 # files to compile
 add_executable(driver_c ./src/PRNG.cpp ./src/driver.cpp ./src/ObjectAllocator.cpp)
+
+add_executable(custom_driver_c  ./src/custom_driver.cpp ./src/ObjectAllocator.cpp)

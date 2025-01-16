@@ -1,0 +1,42 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "cmake --build build"
+		},
+		{
+			"label": "Run Test",
+			"type": "shell",
+			"command": "./build/driver_c",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
+			"label": "Valgring Test",
+			"type": "shell",
+			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/driver_c",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
+			"label": "Run Custom Test",
+			"type": "shell",
+			"command": "./build/custom_driver_c",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
+			"label": "Valgring Custom Test",
+			"type": "shell",
+			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/custom_driver_c",
+			"dependsOn": [
+				"Build"
+			]
+		}
+	]
+}

@@ -7,17 +7,28 @@
  * @brief Implementation for a basic memory manager
  */
 
+// Reminders:
+// - OAConfig is read only
+// - Stats is meant to be updated by the dev
+
+// TODO: Document all code
+
 // TODO: Testing:
 // - Memory Allocation & Deletion
 // - Memory Alignment + Padding & Headers
 // - Correct Debug & Stats info
 
 #include "ObjectAllocator.h"
+#include <cstdint>
+#include <cstring>
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
-    object_size(ObjectSize), config(config), page_size(ObjectSize * config.ObjectsPerPage_) {
-  stats.ObjectSize_ = object_size;
+    object_size(ObjectSize), config(config), page_size(calculate_page_size()) {
+  // TODO: Update the stats
+  stats.ObjectSize_ = ObjectSize;
   stats.PageSize_ = page_size;
+
+  allocate_page();
 }
 
 ObjectAllocator::~ObjectAllocator() {}
@@ -45,11 +56,11 @@ void ObjectAllocator::Free(void *Object) {
   custom_mem_manager_free(Object);
 }
 
-unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK fn) const {}
+unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const { return 0; }
 
-unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK fn) const {}
+unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK) const { return 0; }
 
-unsigned ObjectAllocator::FreeEmptyPages() {}
+unsigned ObjectAllocator::FreeEmptyPages() { return 0; }
 
 bool ObjectAllocator::ImplementedExtraCredit() {
   // TODO: Implement the extra credit and change this.
@@ -66,10 +77,44 @@ OAConfig ObjectAllocator::GetConfig() const { return config; }
 
 OAStats ObjectAllocator::GetStats() const { return stats; }
 
-void *ObjectAllocator::cpp_mem_manager_allocate(const char *label) { return nullptr; }
+void *ObjectAllocator::cpp_mem_manager_allocate(const char *) { return nullptr; }
 
-void ObjectAllocator::cpp_mem_manager_free(void *object) {}
+void ObjectAllocator::cpp_mem_manager_free(void *) {}
 
-void *ObjectAllocator::custom_mem_manager_allocate(const char *label) { return nullptr; }
+void *ObjectAllocator::custom_mem_manager_allocate(const char *) { return nullptr; }
 
-void ObjectAllocator::custom_mem_manager_free(void *object) {}
+void ObjectAllocator::custom_mem_manager_free(void *) {}
+
+void *ObjectAllocator::allocate_page() {
+  uint8_t *new_page = nullptr;
+  try {
+    new_page = new uint8_t[page_size];
+
+  } catch (const std::bad_alloc &) {
+    throw OAException(OAException::E_NO_MEMORY, "Bad allocation thrown by 'new' operator.");
+  }
+
+  memset(new_page, UNALLOCATED_PATTERN, page_size);
+  page_list = reinterpret_cast<GenericObject *>(new_page);
+  page_list->Next = nullptr;
+
+  return new_page;
+}
+
+size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
+  switch (info.type_) {
+    case OAConfig::hbNone: return 0;
+    case OAConfig::hbBasic: return OAConfig::BASIC_HEADER_SIZE;
+    case OAConfig::hbExtended: return info.size_ + info.additional_;
+    case OAConfig::hbExternal: return sizeof(void *);
+    default: return 0;
+  }
+}
+
+size_t ObjectAllocator::calculate_page_size() const {
+  // Calculating the size of the page
+  size_t total = sizeof(void *) + config.LeftAlignSize_;
+  total += config.ObjectsPerPage_ * (get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size);
+  total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
+  return total;
+}

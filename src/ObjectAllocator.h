@@ -12,7 +12,6 @@
 #define OBJECTALLOCATORH
 //---------------------------------------------------------------------------
 
-#include <cstdint>
 #include <string>
 
 // If the client doesn't specify these:
@@ -256,11 +255,9 @@ public:
   ObjectAllocator &operator=(const ObjectAllocator &oa) = delete; //!< Do not implement!
 
 private:
-  // Some "suggested" members (only a suggestion!)
-  GenericObject *page_list; //!< the beginning of the list of pages
-  GenericObject *free_blocks_list; //!< the beginning of the list of objects
+  GenericObject *page_list;
+  GenericObject *free_blocks_list;
 
-  // Lots of other private stuff...
   size_t object_size;
   OAConfig config;
   size_t page_size;
@@ -278,6 +275,32 @@ private:
   void *custom_mem_manager_allocate(const char *label);
   // TODO: Implement this
   void custom_mem_manager_free(void *object);
+
+  // Page management
+
+  // TODO: Implement this
+  /**
+   * \brief Allocates a page using the stored page_size.
+   *
+   * \return Pointer to allocated page
+   */
+  void *allocate_page();
+
+  /**
+   * \brief Returns the header size for the given info
+   *
+   * \param info The structure of the header
+   * \return The size of the header
+   */
+  size_t get_header_size(OAConfig::HeaderBlockInfo info) const;
+
+  /**
+   * \brief Returns the header size for the given info
+   *
+   * \param info The structure of the header
+   * \return The size of the header
+   */
+  size_t calculate_page_size() const;
 };
 
 #endif
