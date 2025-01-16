@@ -15,9 +15,25 @@
 			]
 		},
 		{
-			"label": "Valgring Test",
+			"label": "Run Test Num",
+			"type": "shell",
+			"command": "./build/driver_c ${input:test_num}",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
+			"label": "Valgrind Test",
 			"type": "shell",
 			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/driver_c",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
+			"label": "Valgrind Test Num",
+			"type": "shell",
+			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/driver_c ${input:test_num}",
 			"dependsOn": [
 				"Build"
 			]
@@ -31,12 +47,19 @@
 			]
 		},
 		{
-			"label": "Valgring Custom Test",
+			"label": "Valgrind Custom Test",
 			"type": "shell",
 			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/custom_driver_c",
 			"dependsOn": [
 				"Build"
 			]
+		}
+	],
+	"inputs": [
+		{
+			"id": "test_num",
+			"description": "Test Number:",
+			"type": "promptString"
 		}
 	]
 }

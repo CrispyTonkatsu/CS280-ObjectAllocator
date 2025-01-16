@@ -113,35 +113,28 @@ size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
   switch (info.type_) {
     case OAConfig::hbNone: return 0;
     case OAConfig::hbBasic: return OAConfig::BASIC_HEADER_SIZE;
-
-    // TODO: Ask whether info.additional_ is something that I should count in the page size
-    case OAConfig::hbExtended: return info.size_ + info.additional_;
-
+    case OAConfig::hbExtended: return info.size_;
     case OAConfig::hbExternal: return sizeof(void *);
     default: return 0;
   }
 }
 
 size_t ObjectAllocator::calculate_left_alignment_size() const {
+  if (config.Alignment_ <= 0) return 0;
   size_t remainder = ((sizeof(void *) + config.PadBytes_ + get_header_size(config.HBlockInfo_)) % config.Alignment_);
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
 }
 
 size_t ObjectAllocator::calculate_inter_alignment_size() const {
+  if (config.Alignment_ <= 0) return 0;
   size_t remainder((object_size + (2 * config.PadBytes_) + get_header_size(config.HBlockInfo_)) % config.Alignment_);
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
 }
 
 size_t ObjectAllocator::calculate_page_size() const {
-
-  size_t total = sizeof(void *) + config.LeftAlignSize_;
+  size_t total = 4 + config.LeftAlignSize_;
   total += config.ObjectsPerPage_ * (get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size);
   total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
-
-  // TODO: Left off here, calculating the alignment variables
-  std::cout << config.LeftAlignSize_ << std::endl;
-  std::cout << config.InterAlignSize_ << std::endl;
-  std::cout << total << std::endl;
 
   return total;
 }
