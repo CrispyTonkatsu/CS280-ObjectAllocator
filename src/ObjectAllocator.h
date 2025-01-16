@@ -295,10 +295,23 @@ private:
   size_t get_header_size(OAConfig::HeaderBlockInfo info) const;
 
   /**
-   * \brief Returns the header size for the given info
+   * \brief Returns the left alignment size
    *
-   * \param info The structure of the header
-   * \return The size of the header
+   * \return The size of the left alignment bytes
+   */
+  size_t calculate_left_alignment_size() const;
+
+  /**
+   * \brief Returns the inter alignment size
+   *
+   * \return The size of the inter alignment bytes
+   */
+  size_t calculate_inter_alignment_size() const;
+
+  /**
+   * \brief Returns the size of an individual page
+   *
+   * \return The size of the page
    */
   size_t calculate_page_size() const;
 };

@@ -18,17 +18,23 @@
 // - Memory Alignment + Padding & Headers
 // - Correct Debug & Stats info
 
+// TODO: Check that there are no STL usages
 #include "ObjectAllocator.h"
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
+#include <ostream>
 
-ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
-    object_size(ObjectSize), config(config), page_size(calculate_page_size()) {
+ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) : object_size(ObjectSize), config(config) {
+  this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
+  this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
+
+  page_size = calculate_page_size();
+
   // TODO: Update the stats
   stats.ObjectSize_ = ObjectSize;
   stats.PageSize_ = page_size;
-
-  allocate_page();
 }
 
 ObjectAllocator::~ObjectAllocator() {}
@@ -94,7 +100,9 @@ void *ObjectAllocator::allocate_page() {
     throw OAException(OAException::E_NO_MEMORY, "Bad allocation thrown by 'new' operator.");
   }
 
+  // TODO: Write the signature well
   memset(new_page, UNALLOCATED_PATTERN, page_size);
+
   page_list = reinterpret_cast<GenericObject *>(new_page);
   page_list->Next = nullptr;
 
@@ -105,16 +113,35 @@ size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
   switch (info.type_) {
     case OAConfig::hbNone: return 0;
     case OAConfig::hbBasic: return OAConfig::BASIC_HEADER_SIZE;
+
+    // TODO: Ask whether info.additional_ is something that I should count in the page size
     case OAConfig::hbExtended: return info.size_ + info.additional_;
+
     case OAConfig::hbExternal: return sizeof(void *);
     default: return 0;
   }
 }
 
+size_t ObjectAllocator::calculate_left_alignment_size() const {
+  size_t remainder = ((sizeof(void *) + config.PadBytes_ + get_header_size(config.HBlockInfo_)) % config.Alignment_);
+  return (remainder > 0) ? config.Alignment_ - remainder : 0;
+}
+
+size_t ObjectAllocator::calculate_inter_alignment_size() const {
+  size_t remainder((object_size + (2 * config.PadBytes_) + get_header_size(config.HBlockInfo_)) % config.Alignment_);
+  return (remainder > 0) ? config.Alignment_ - remainder : 0;
+}
+
 size_t ObjectAllocator::calculate_page_size() const {
-  // Calculating the size of the page
+
   size_t total = sizeof(void *) + config.LeftAlignSize_;
   total += config.ObjectsPerPage_ * (get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size);
   total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
+
+  // TODO: Left off here, calculating the alignment variables
+  std::cout << config.LeftAlignSize_ << std::endl;
+  std::cout << config.InterAlignSize_ << std::endl;
+  std::cout << total << std::endl;
+
   return total;
 }

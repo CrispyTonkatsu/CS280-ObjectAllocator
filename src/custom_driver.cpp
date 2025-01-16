@@ -1,7 +1,9 @@
 #include "ObjectAllocator.h"
 
 int main() {
-  ObjectAllocator *test_allocator = new ObjectAllocator(16, OAConfig());
+  OAConfig config(false, 3, 10, false, 2, OAConfig::HeaderBlockInfo(OAConfig::hbBasic), 16);
 
-  delete test_allocator;
+  ObjectAllocator *allocator = new ObjectAllocator(16, config);
+
+  delete allocator;
 }
