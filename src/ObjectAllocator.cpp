@@ -10,6 +10,7 @@
 // Reminders:
 // - OAConfig is read only
 // - Stats is meant to be updated by the dev
+// - static_cast only for void*, reinterpret_cast all other T
 
 // TODO: Document all code
 
@@ -18,15 +19,17 @@
 // - Memory Alignment + Padding & Headers
 // - Correct Debug & Stats info
 
+// TODO: Make sure that all exception messages match what is in the handout requirements
+
 // TODO: Check that there are no STL usages
 #include "ObjectAllocator.h"
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
-#include <ostream>
 
-ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) : object_size(ObjectSize), config(config) {
+using u8 = uint8_t;
+
+ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
+    object_size(ObjectSize), config(config), block_size(calculate_block_size()) {
   this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
   this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
 
@@ -35,9 +38,15 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) : ob
   // TODO: Update the stats
   stats.ObjectSize_ = ObjectSize;
   stats.PageSize_ = page_size;
+
+  GenericObject *new_page = allocate_page();
+  bind_page(new_page);
 }
 
-ObjectAllocator::~ObjectAllocator() {}
+ObjectAllocator::~ObjectAllocator() {
+  // TODO: Delete make sure to cleanup properly later
+  delete[] reinterpret_cast<u8 *>(page_list);
+}
 
 void *ObjectAllocator::Allocate(const char *label) {
   // TODO: Add debug checks
@@ -91,22 +100,56 @@ void *ObjectAllocator::custom_mem_manager_allocate(const char *) { return nullpt
 
 void ObjectAllocator::custom_mem_manager_free(void *) {}
 
-void *ObjectAllocator::allocate_page() {
-  uint8_t *new_page = nullptr;
+GenericObject *ObjectAllocator::allocate_page() {
+  if (stats.PagesInUse_ + 1 > config.MaxPages_) {
+    throw OAException(OAException::E_NO_PAGES, "The maximum amount of pages has been allocated");
+  }
+
+  u8 *new_page = nullptr;
   try {
-    new_page = new uint8_t[page_size];
+    new_page = new u8[page_size];
 
   } catch (const std::bad_alloc &) {
     throw OAException(OAException::E_NO_MEMORY, "Bad allocation thrown by 'new' operator.");
   }
 
-  // TODO: Write the signature well
-  memset(new_page, UNALLOCATED_PATTERN, page_size);
+  if (config.DebugOn_) {
+    // TODO: Implement a signing function (debug pattern)
+  }
 
-  page_list = reinterpret_cast<GenericObject *>(new_page);
-  page_list->Next = nullptr;
+  GenericObject *new_obj = reinterpret_cast<GenericObject *>(new_page);
+  new_obj->Next = nullptr;
 
-  return new_page;
+  return new_obj;
+}
+
+void ObjectAllocator::bind_page(GenericObject *page) {
+  if (page == nullptr) {
+    return;
+  }
+
+  // TODO: Add signing here if that is needed
+
+  u8 *raw_page = reinterpret_cast<u8 *>(page);
+
+  u8 *previous_block = nullptr;
+  u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
+
+  // TODO: Add padding bytes as you go (probably abstract this into a separate function)
+  for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
+    GenericObject *previous_object = reinterpret_cast<GenericObject *>(previous_block);
+    GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
+
+    current_object->Next = previous_object;
+
+    previous_block = current_block;
+    current_block += block_size;
+  }
+
+  free_blocks_list = reinterpret_cast<GenericObject *>(current_block);
+
+  page->Next = page_list;
+  page_list = page;
 }
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
@@ -127,16 +170,18 @@ size_t ObjectAllocator::calculate_left_alignment_size() const {
 
 size_t ObjectAllocator::calculate_inter_alignment_size() const {
   if (config.Alignment_ <= 0) return 0;
-  size_t remainder((object_size + (2 * config.PadBytes_) + get_header_size(config.HBlockInfo_)) % config.Alignment_);
+  size_t remainder(block_size % config.Alignment_);
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
+}
+
+size_t ObjectAllocator::calculate_block_size() const {
+  return get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size;
 }
 
 size_t ObjectAllocator::calculate_page_size() const {
   size_t total = sizeof(void *) + config.LeftAlignSize_;
-  total += config.ObjectsPerPage_ * (get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size);
+  total += config.ObjectsPerPage_ * block_size;
   total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
-
-  std::cout << total << std::endl;
 
   return total;
 }

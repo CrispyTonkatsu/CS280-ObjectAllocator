@@ -206,8 +206,8 @@ struct MemBlockInfo {
 class ObjectAllocator {
 public:
   // Defined by the client (pointer to a block, size of block)
-  using DUMPCALLBACK = void (*)(const void *, size_t); //!< Callback function when dumping memory leaks
-  using VALIDATECALLBACK = void (*)(const void *, size_t); //!< Callback function when validating blocks
+  typedef void (*DUMPCALLBACK)(const void *, size_t); //!< Callback function when dumping memory leaks
+  typedef void (*VALIDATECALLBACK)(const void *, size_t); //!< Callback function when validating blocks
 
   // Predefined values for memory signatures
   static const unsigned char UNALLOCATED_PATTERN = 0xAA; //!< New memory never given to the client
@@ -260,6 +260,7 @@ private:
 
   size_t object_size;
   OAConfig config;
+  size_t block_size;
   size_t page_size;
 
   OAStats stats;
@@ -278,13 +279,27 @@ private:
 
   // Page management
 
-  // TODO: Implement this
   /**
-   * \brief Allocates a page using the stored page_size.
+   * \brief Pushes back the GenericObject* to the free_object_list
+   *
+   * \param The pointer to push into
+   */
+  void object_push_back();
+
+  /**
+   * \brief Factory method for a page in memory.
    *
    * \return Pointer to allocated page
    */
-  void *allocate_page();
+  GenericObject *allocate_page();
+
+  /**
+   * \brief Updates `free_object_list` to include the pointers to the next available blocks. It also adds the page to
+   * the `page_list`.
+   *
+   * \param page The page to add
+   */
+  void bind_page(GenericObject *page);
 
   /**
    * \brief Returns the header size for the given info
@@ -307,6 +322,13 @@ private:
    * \return The size of the inter alignment bytes
    */
   size_t calculate_inter_alignment_size() const;
+
+  /**
+   * \brief Returns the size of a block with the current config
+   *
+   * \return The size of a block in a page
+   */
+  size_t calculate_block_size() const;
 
   /**
    * \brief Returns the size of an individual page
