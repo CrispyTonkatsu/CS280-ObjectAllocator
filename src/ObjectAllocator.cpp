@@ -81,7 +81,6 @@ void ObjectAllocator::Free(void *Object) {
 
   stats.Deallocations_++;
   stats.ObjectsInUse_--;
-  stats.FreeObjects_++;
 }
 
 unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const { return 0; }
@@ -123,24 +122,17 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
   // TODO: Add the debug checks
 
   GenericObject *cast_object = reinterpret_cast<GenericObject *>(object);
-  cast_object->Next = free_objects_list;
-
-  if (free_objects_list != nullptr) {
-    free_objects_list->Next = cast_object;
-  }
+  object_push_front(cast_object, FREED_PATTERN);
 }
 
-void ObjectAllocator::object_push_front(GenericObject *object) {
+void ObjectAllocator::object_push_front(GenericObject *object, const unsigned char signature) {
   if (object == nullptr) {
     return;
   }
 
-  // HACK: Left off here, implementing a way to sign with the different patterns for the data bytes, probably making it
-  // a separate field or sth like that in the signature (Test 2: the signatures)
-
   // TODO: Probably add the signing and other writing for the object here.
   u8 *raw_obj = reinterpret_cast<u8 *>(object);
-  memset(raw_obj, UNALLOCATED_PATTERN, object_size);
+  memset(raw_obj, signature, object_size);
 
   object->Next = free_objects_list;
   free_objects_list = object;
@@ -197,7 +189,7 @@ void ObjectAllocator::page_add(GenericObject *page) {
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
-    object_push_front(current_object);
+    object_push_front(current_object, UNALLOCATED_PATTERN);
 
     current_block += block_size;
   }
@@ -220,13 +212,13 @@ size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
 
 size_t ObjectAllocator::calculate_left_alignment_size() const {
   if (config.Alignment_ <= 0) return 0;
-  size_t remainder = ((sizeof(void *) + config.PadBytes_ + get_header_size(config.HBlockInfo_)) % config.Alignment_);
+  size_t remainder = (sizeof(void *) + config.PadBytes_ + get_header_size(config.HBlockInfo_)) % config.Alignment_;
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
 }
 
 size_t ObjectAllocator::calculate_inter_alignment_size() const {
   if (config.Alignment_ <= 0) return 0;
-  size_t remainder(block_size % config.Alignment_);
+  size_t remainder = block_size % config.Alignment_;
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
 }
 

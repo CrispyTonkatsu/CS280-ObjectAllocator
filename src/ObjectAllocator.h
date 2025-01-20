@@ -301,8 +301,9 @@ private:
    * \brief Links object in such a way that it is the front of the free object list
    *
    * \param object The object that will be inserted into the linked list
+   * \param signature Pattern to sign the space with
    */
-  void object_push_front(GenericObject *object);
+  void object_push_front(GenericObject *object, const unsigned char signature);
 
   /**
    * \brief Returns the first object in the free_objects_list
