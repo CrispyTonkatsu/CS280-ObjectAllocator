@@ -267,14 +267,32 @@ private:
 
   // top-level private methods
 
-  // TODO: Implement this
+  /**
+   * \brief Use the C++ native memory allocator to allocate an object
+   *
+   * \return Pointer to the object's location in memory
+   */
   GenericObject *cpp_mem_manager_allocate(const char *label);
-  // TODO: Implement this
+
+  /**
+   * \brief Use the C++ native memory allocator to free an object from memory
+   *
+   * \param object Pointer to the object to free
+   */
   void cpp_mem_manager_free(void *object);
 
-  // TODO: Implement this
+  /**
+   * \brief Use the custom object allocator to allocate an object in memory
+   *
+   * \return Pointer to the object's location in memory
+   */
   GenericObject *custom_mem_manager_allocate(const char *label);
-  // TODO: Implement this
+
+  /**
+   * \brief Use the custom memory allocator to free an object from memory
+   *
+   * \param object Pointer to the object to free
+   */
   void custom_mem_manager_free(void *object);
 
   // Object Management

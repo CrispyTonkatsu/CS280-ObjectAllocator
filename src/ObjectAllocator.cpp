@@ -26,7 +26,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <type_traits>
 
 using u8 = uint8_t;
 
@@ -61,7 +60,6 @@ void *ObjectAllocator::Allocate(const char *label) {
     output = custom_mem_manager_allocate(label);
   }
 
-  // TODO: Update stats
   stats.Allocations_++;
   stats.ObjectsInUse_++;
 
@@ -81,7 +79,6 @@ void ObjectAllocator::Free(void *Object) {
     custom_mem_manager_free(Object);
   }
 
-  // TODO: Update Stats
   stats.Deallocations_++;
   stats.ObjectsInUse_--;
   stats.FreeObjects_++;
@@ -138,7 +135,13 @@ void ObjectAllocator::object_push_front(GenericObject *object) {
     return;
   }
 
+  // HACK: Left off here, implementing a way to sign with the different patterns for the data bytes, probably making it
+  // a separate field or sth like that in the signature (Test 2: the signatures)
+
   // TODO: Probably add the signing and other writing for the object here.
+  u8 *raw_obj = reinterpret_cast<u8 *>(object);
+  memset(raw_obj, UNALLOCATED_PATTERN, object_size);
+
   object->Next = free_objects_list;
   free_objects_list = object;
 
@@ -152,6 +155,9 @@ GenericObject *ObjectAllocator::object_pop_front() {
 
   GenericObject *output = free_objects_list;
   free_objects_list = free_objects_list->Next;
+
+  u8 *raw_obj = reinterpret_cast<u8 *>(output);
+  memset(raw_obj, ALLOCATED_PATTERN, object_size);
 
   stats.FreeObjects_--;
   return output;
@@ -181,13 +187,13 @@ void ObjectAllocator::page_add(GenericObject *page) {
     return;
   }
 
-  if (config.DebugOn_) {
-    // TODO: Implement a signing function (debug patterns)
-  }
-
   u8 *raw_page = reinterpret_cast<u8 *>(page);
 
   u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
+
+  if (config.DebugOn_) {
+    // TODO: Implement a signing function (debug patterns)
+  }
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
