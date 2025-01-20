@@ -10,7 +10,7 @@ set(CMAKE_C_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES}
 set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 
 # Compile Options
-add_compile_options(-O -Werror -Wall -Wextra -Wconversion -std=c++14 -pedantic)
+add_compile_options(-O1 -O -Werror -Wall -Wextra -Wconversion -std=c++14 -pedantic)
 
 # files to compile
 add_executable(driver_c ./src/PRNG.cpp ./src/driver.cpp ./src/ObjectAllocator.cpp)

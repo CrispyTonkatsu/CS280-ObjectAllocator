@@ -256,7 +256,7 @@ public:
 
 private:
   GenericObject *page_list;
-  GenericObject *free_blocks_list;
+  GenericObject *free_objects_list;
 
   size_t object_size;
   OAConfig config;
@@ -265,26 +265,35 @@ private:
 
   OAStats stats;
 
-  // Private Methods
+  // top-level private methods
 
   // TODO: Implement this
-  void *cpp_mem_manager_allocate(const char *label);
+  GenericObject *cpp_mem_manager_allocate(const char *label);
   // TODO: Implement this
   void cpp_mem_manager_free(void *object);
 
   // TODO: Implement this
-  void *custom_mem_manager_allocate(const char *label);
+  GenericObject *custom_mem_manager_allocate(const char *label);
   // TODO: Implement this
   void custom_mem_manager_free(void *object);
 
-  // Page management
+  // Object Management
 
   /**
-   * \brief Pushes back the GenericObject* to the free_object_list
+   * \brief Links object in such a way that it is the front of the free object list
    *
-   * \param The pointer to push into
+   * \param object The object that will be inserted into the linked list
    */
-  void object_push_back();
+  void object_push_front(GenericObject *object);
+
+  /**
+   * \brief Returns the first object in the free_objects_list
+   *
+   * \return The pointer to the object's location
+   */
+  GenericObject *object_pop_front();
+
+  // Page Management
 
   /**
    * \brief Factory method for a page in memory.
@@ -299,7 +308,7 @@ private:
    *
    * \param page The page to add
    */
-  void bind_page(GenericObject *page);
+  void page_add(GenericObject *page);
 
   /**
    * \brief Returns the header size for the given info

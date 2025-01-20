@@ -24,7 +24,9 @@
 // TODO: Check that there are no STL usages
 #include "ObjectAllocator.h"
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <type_traits>
 
 using u8 = uint8_t;
 
@@ -35,12 +37,11 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
 
   page_size = calculate_page_size();
 
-  // TODO: Update the stats
   stats.ObjectSize_ = ObjectSize;
   stats.PageSize_ = page_size;
 
   GenericObject *new_page = allocate_page();
-  bind_page(new_page);
+  page_add(new_page);
 }
 
 ObjectAllocator::~ObjectAllocator() {
@@ -50,25 +51,40 @@ ObjectAllocator::~ObjectAllocator() {
 
 void *ObjectAllocator::Allocate(const char *label) {
   // TODO: Add debug checks
-  // TODO: Update stats
-  stats.Allocations_++;
+
+  GenericObject *output;
 
   if (config.UseCPPMemManager_) {
-    return cpp_mem_manager_allocate(label);
+    output = cpp_mem_manager_allocate(label);
+
+  } else {
+    output = custom_mem_manager_allocate(label);
   }
-  return custom_mem_manager_allocate(label);
+
+  // TODO: Update stats
+  stats.Allocations_++;
+  stats.ObjectsInUse_++;
+
+  if (stats.ObjectsInUse_ > stats.MostObjects_) {
+    stats.MostObjects_ = stats.ObjectsInUse_;
+  }
+
+  return output;
 }
 
 void ObjectAllocator::Free(void *Object) {
   // TODO: Add debug checks
-  // TODO: Update Stats
-  stats.Deallocations_++;
 
   if (config.UseCPPMemManager_) {
     cpp_mem_manager_free(Object);
-    return;
+  } else {
+    custom_mem_manager_free(Object);
   }
-  custom_mem_manager_free(Object);
+
+  // TODO: Update Stats
+  stats.Deallocations_++;
+  stats.ObjectsInUse_--;
+  stats.FreeObjects_++;
 }
 
 unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const { return 0; }
@@ -84,7 +100,7 @@ bool ObjectAllocator::ImplementedExtraCredit() {
 
 void ObjectAllocator::SetDebugState(bool State) { config.DebugOn_ = State; }
 
-const void *ObjectAllocator::GetFreeList() const { return free_blocks_list; }
+const void *ObjectAllocator::GetFreeList() const { return free_objects_list; }
 
 const void *ObjectAllocator::GetPageList() const { return page_list; }
 
@@ -92,29 +108,66 @@ OAConfig ObjectAllocator::GetConfig() const { return config; }
 
 OAStats ObjectAllocator::GetStats() const { return stats; }
 
-void *ObjectAllocator::cpp_mem_manager_allocate(const char *) { return nullptr; }
+GenericObject *ObjectAllocator::cpp_mem_manager_allocate(const char *) { return nullptr; }
 
 void ObjectAllocator::cpp_mem_manager_free(void *) {}
 
-void *ObjectAllocator::custom_mem_manager_allocate(const char *) { return nullptr; }
+GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
+  // TODO: No idea what the label is supposed to do.
 
-void ObjectAllocator::custom_mem_manager_free(void *) {}
+  if (free_objects_list == nullptr) {
+    page_add(allocate_page());
+  }
+
+  return object_pop_front();
+}
+
+void ObjectAllocator::custom_mem_manager_free(void *object) {
+  // TODO: Add the debug checks
+
+  GenericObject *cast_object = reinterpret_cast<GenericObject *>(object);
+  cast_object->Next = free_objects_list;
+
+  if (free_objects_list != nullptr) {
+    free_objects_list->Next = cast_object;
+  }
+}
+
+void ObjectAllocator::object_push_front(GenericObject *object) {
+  if (object == nullptr) {
+    return;
+  }
+
+  // TODO: Probably add the signing and other writing for the object here.
+  object->Next = free_objects_list;
+  free_objects_list = object;
+
+  stats.FreeObjects_++;
+}
+
+GenericObject *ObjectAllocator::object_pop_front() {
+  if (free_objects_list == nullptr) {
+    return nullptr;
+  }
+
+  GenericObject *output = free_objects_list;
+  free_objects_list = free_objects_list->Next;
+
+  stats.FreeObjects_--;
+  return output;
+}
 
 GenericObject *ObjectAllocator::allocate_page() {
-  if (stats.PagesInUse_ + 1 > config.MaxPages_) {
+  if (config.MaxPages_ != 0 && stats.PagesInUse_ + 1 > config.MaxPages_) {
     throw OAException(OAException::E_NO_PAGES, "The maximum amount of pages has been allocated");
   }
 
   u8 *new_page = nullptr;
   try {
-    new_page = new u8[page_size];
+    new_page = new u8[page_size]();
 
   } catch (const std::bad_alloc &) {
     throw OAException(OAException::E_NO_MEMORY, "Bad allocation thrown by 'new' operator.");
-  }
-
-  if (config.DebugOn_) {
-    // TODO: Implement a signing function (debug pattern)
   }
 
   GenericObject *new_obj = reinterpret_cast<GenericObject *>(new_page);
@@ -123,33 +176,30 @@ GenericObject *ObjectAllocator::allocate_page() {
   return new_obj;
 }
 
-void ObjectAllocator::bind_page(GenericObject *page) {
+void ObjectAllocator::page_add(GenericObject *page) {
   if (page == nullptr) {
     return;
   }
 
-  // TODO: Add signing here if that is needed
+  if (config.DebugOn_) {
+    // TODO: Implement a signing function (debug patterns)
+  }
 
   u8 *raw_page = reinterpret_cast<u8 *>(page);
 
-  u8 *previous_block = nullptr;
   u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
 
-  // TODO: Add padding bytes as you go (probably abstract this into a separate function)
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
-    GenericObject *previous_object = reinterpret_cast<GenericObject *>(previous_block);
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
+    object_push_front(current_object);
 
-    current_object->Next = previous_object;
-
-    previous_block = current_block;
     current_block += block_size;
   }
 
-  free_blocks_list = reinterpret_cast<GenericObject *>(current_block);
-
   page->Next = page_list;
   page_list = page;
+
+  stats.PagesInUse_++;
 }
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
