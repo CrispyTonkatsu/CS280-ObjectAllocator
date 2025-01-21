@@ -1,10 +1,10 @@
 /**
- * @file ObjectAllocator.cpp
- * @author Edgar Jose Donoso Mansilla (e.donosomansilla)
- * @course CS280
- * @term Spring 2025
+ * \file ObjectAllocator.cpp
+ * \author Edgar Jose Donoso Mansilla (e.donosomansilla)
+ * \course CS280
+ * \term Spring 2025
  *
- * @brief Implementation for a basic memory manager
+ * \brief Implementation for a basic memory manager
  */
 
 // Reminders:
@@ -33,7 +33,7 @@ using u8 = uint8_t;
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
     page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config),
-    block_size(calculate_block_size()) {
+    block_size(calculate_block_size()), stats() {
   this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
   this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
 
@@ -128,28 +128,23 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
 void ObjectAllocator::custom_mem_manager_free(void *object) {
   // TODO: Add the debug checks
 
-  // HACK: Left off here.
+  // HACK: Left off here. Adding the functions for checking proper deallocation
 
-  // TODO: Boundary Checks: Checks that the pointer is in a valid location (not outside pages and not between blocks)
-  // Ask how to do the boundary checks.
-  // - For no headers -> check that the pointer is inside a page
-  // - For padding ->
-  // - For headers ->
-  // - For alignment -> offset % alignment == 0
-  //
   // TODO: Double Free: Checks that the blocks are not being freed multiple times
   // - For no headers -> that the pointer is not inside any of the free_object_list data space.
   // - For headers -> just check the flag for in use.
 
   GenericObject *cast_object = reinterpret_cast<GenericObject *>(object);
 
-  if (!object_check_boundary(cast_object)) {
-    throw OAException(
-        OAException::E_BAD_BOUNDARY, "The memory address lies outside of the allocated blocks' boundaries");
-  }
+  if (config.DebugOn_) {
+    if (!object_validate_location(cast_object)) {
+      throw OAException(
+          OAException::E_BAD_BOUNDARY, "The memory address lies outside of the allocated blocks' boundaries");
+    }
 
-  if (object_check_double_free(cast_object)) {
-    throw OAException(OAException::E_MULTIPLE_FREE, "The object is being deallocated multiple times");
+    if (object_check_double_free(cast_object)) {
+      throw OAException(OAException::E_MULTIPLE_FREE, "The object is being deallocated multiple times");
+    }
   }
 
   // TODO: Implement more thorough delete which will update the header and such (probably inside of this function)
@@ -164,6 +159,16 @@ void ObjectAllocator::object_push_front(GenericObject *object, const unsigned ch
   // TODO: Probably add the signing and other writing for the object here.
   write_signature(object, signature, object_size);
 
+  if (config.DebugOn_) {
+    // TODO: Test padding for corruption
+  }
+  // Writing padding
+  u8 *raw_object = reinterpret_cast<u8 *>(object);
+  if (config.PadBytes_ > 0) {
+    write_signature(raw_object - config.PadBytes_, PAD_PATTERN, config.PadBytes_);
+    write_signature(raw_object + object_size, PAD_PATTERN, config.PadBytes_);
+  }
+
   object->Next = free_objects_list;
   free_objects_list = object;
 
@@ -177,6 +182,8 @@ GenericObject *ObjectAllocator::object_pop_front() {
 
   GenericObject *output = free_objects_list;
   free_objects_list = free_objects_list->Next;
+
+  // TODO: Write header stuff here
 
   write_signature(output, ALLOCATED_PATTERN, object_size);
 
@@ -275,28 +282,41 @@ bool ObjectAllocator::object_is_in_free_list(GenericObject *object) const {
   return false;
 }
 
-// HACK: This is checking if the pointer is IN the boundary (multiple of block_size), this means that the pointer is in
-// a valid location
-bool ObjectAllocator::object_check_boundary(GenericObject *object) const {
-  bool is_inside = false;
-
-  // TODO: finish implementing all the other cases
-  switch (config.HBlockInfo_.type_) {
-    case OAConfig::hbNone: is_inside = object_is_inside_page(object); break;
-    case OAConfig::hbBasic: break;
-    case OAConfig::hbExtended: break;
-    case OAConfig::hbExternal: break;
+bool ObjectAllocator::object_validate_location(GenericObject *location) const {
+  if (location == nullptr) {
+    return false;
   }
 
-  return is_inside;
+  GenericObject *page = object_is_inside_page(location);
+  if (page == nullptr) {
+    return false;
+  }
+
+  u8 *raw_location = reinterpret_cast<u8 *>(location);
+  u8 *blocks_start = reinterpret_cast<u8 *>(page) +
+                     (sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_);
+
+  ptrdiff_t distance = raw_location - blocks_start;
+  if (distance < 0) {
+    return false;
+  }
+
+  return static_cast<size_t>(distance) % block_size == 0;
 }
 
-bool ObjectAllocator::object_is_inside_page(GenericObject *object) const {
-  bool is_inside = true;
+GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) const {
+  GenericObject *current_page = page_list;
 
   // HACK: Left off here, implementing the check if its inside any of the pages.
+  while (current_page != nullptr) {
+    if (is_in_range(reinterpret_cast<u8 *>(current_page), page_size, reinterpret_cast<u8 *>(object))) {
+      return current_page;
+    }
 
-  return is_inside;
+    current_page = current_page->Next;
+  }
+
+  return nullptr;
 }
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
@@ -349,7 +369,7 @@ void ObjectAllocator::write_signature(u8 *location, const unsigned char pattern,
   memset(location, pattern, size);
 }
 
-bool ObjectAllocator::is_in_range(u8 *start, size_t length, u8 *address) {
-  intptr_t offset = address - start;
+bool ObjectAllocator::is_in_range(u8 *start, size_t length, u8 *address) const {
+  ptrdiff_t offset = address - start;
   return 0 < offset && offset < static_cast<intptr_t>(length);
 }

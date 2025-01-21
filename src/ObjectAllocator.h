@@ -330,20 +330,20 @@ private:
   bool object_is_in_free_list(GenericObject *object) const;
 
   /**
-   * \brief Checks if the object is within the boundaries of the allocated data
+   * \brief Checks if the pointer is a valid pointer to a block
    *
-   * \param object The object to check
-   * \return Whether the object lies inside of these boundaries
+   * \param location The location to validate
+   * \return Whether the object is within a valid location
    */
-  bool object_check_boundary(GenericObject *object) const;
+  bool object_validate_location(GenericObject *location) const;
 
   /**
    * \brief Checks if the object is in any of the allocated pages
    *
    * \param object The object to look for in the pages
-   * \return Whether the object is in any allocated page
+   * \return The page in which the object is located
    */
-  bool object_is_inside_page(GenericObject *object) const;
+  GenericObject *object_is_inside_page(GenericObject *object) const;
 
   // Page Management
 
@@ -436,7 +436,7 @@ private:
    *
    * \return Whether the address is inside of the provided range
    */
-  bool is_in_range(uint8_t *start, size_t length, uint8_t *address);
+  bool is_in_range(uint8_t *start, size_t length, uint8_t *address) const;
 };
 
 #endif
