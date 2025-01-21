@@ -128,12 +128,6 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
 void ObjectAllocator::custom_mem_manager_free(void *object) {
   // TODO: Add the debug checks
 
-  // HACK: Left off here. Adding the functions for checking proper deallocation
-
-  // TODO: Double Free: Checks that the blocks are not being freed multiple times
-  // - For no headers -> that the pointer is not inside any of the free_object_list data space.
-  // - For headers -> just check the flag for in use.
-
   GenericObject *cast_object = reinterpret_cast<GenericObject *>(object);
 
   if (config.DebugOn_) {
@@ -142,6 +136,9 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
           OAException::E_BAD_BOUNDARY, "The memory address lies outside of the allocated blocks' boundaries");
     }
 
+    // TODO: Double Free: Checks that the blocks are not being freed multiple times
+    // - For no headers -> that the pointer is not inside any of the free_object_list data space.
+    // - For headers -> just check the flag for in use.
     if (object_check_double_free(cast_object)) {
       throw OAException(OAException::E_MULTIPLE_FREE, "The object is being deallocated multiple times");
     }
@@ -307,7 +304,6 @@ bool ObjectAllocator::object_validate_location(GenericObject *location) const {
 GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) const {
   GenericObject *current_page = page_list;
 
-  // HACK: Left off here, implementing the check if its inside any of the pages.
   while (current_page != nullptr) {
     if (is_in_range(reinterpret_cast<u8 *>(current_page), page_size, reinterpret_cast<u8 *>(object))) {
       return current_page;
@@ -318,6 +314,9 @@ GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) con
 
   return nullptr;
 }
+
+// HACK: Left off here, implementing the writing of the headers
+void ObjectAllocator::header_write(GenericObject *location) {};
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
   switch (info.type_) {

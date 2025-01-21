@@ -345,6 +345,10 @@ private:
    */
   GenericObject *object_is_inside_page(GenericObject *object) const;
 
+  // Header Management
+
+  void header_write(GenericObject *location);
+
   // Page Management
 
   /**
