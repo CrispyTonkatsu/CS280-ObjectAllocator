@@ -12,6 +12,7 @@
 #define OBJECTALLOCATORH
 //---------------------------------------------------------------------------
 
+#include <cstdint>
 #include <string>
 
 // If the client doesn't specify these:
@@ -265,7 +266,7 @@ private:
 
   OAStats stats;
 
-  // top-level private methods
+  // Top-level private methods
 
   /**
    * \brief Use the C++ native memory allocator to allocate an object
@@ -312,6 +313,22 @@ private:
    */
   GenericObject *object_pop_front();
 
+  /**
+   * \brief Checks if the object is already free
+   *
+   * \param object The object to check
+   * \return Whether the object has already been freed
+   */
+  bool object_check_double_free(GenericObject *object) const;
+
+  /**
+   * \brief Checks if the object is in the free_objects_list
+   *
+   * \param object The object to look for in the list
+   * \return Whether the object is in the list
+   */
+  bool object_is_in_free_list(GenericObject *object) const;
+
   // Page Management
 
   /**
@@ -327,7 +344,16 @@ private:
    *
    * \param page The page to add
    */
-  void page_add(GenericObject *page);
+  void page_push_front(GenericObject *page);
+
+  /**
+   * \brief Returns the first page in the list. It will not check if a page has objects in use or not.
+   *
+   * \return The page at the front of the list
+   */
+  GenericObject *page_pop_front();
+
+  // Calculations
 
   /**
    * \brief Returns the header size for the given info
@@ -364,6 +390,26 @@ private:
    * \return The size of the page
    */
   size_t calculate_page_size() const;
+
+  // Utilities
+
+  /**
+   * \brief This function will call memset only if debug is on.
+   *
+   * \param object The object's block to sign
+   * \param pattern The pattern to write
+   * \param size The length of the signature
+   */
+  void write_signature(GenericObject *object, const unsigned char pattern, size_t size);
+
+  /**
+   * \brief This function will call memset only if debug is on.
+   *
+   * \param location The location to sign
+   * \param pattern The pattern to write
+   * \param size The length of the signature
+   */
+  void write_signature(uint8_t *location, const unsigned char pattern, size_t size);
 };
 
 #endif
