@@ -347,7 +347,17 @@ private:
 
   // Header Management
 
-  void header_write(GenericObject *location);
+  void header_initialize(GenericObject *block_location);
+
+  void header_basic_initialize(GenericObject *block_location);
+
+  void header_update_alloc(GenericObject *block_location);
+
+  void header_basic_update_alloc(GenericObject *block_location);
+
+  void header_update_dealloc(GenericObject *block_location);
+
+  void header_basic_update_dealloc(GenericObject *block_location);
 
   // Page Management
 

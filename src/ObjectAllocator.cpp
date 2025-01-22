@@ -7,6 +7,8 @@
  * \brief Implementation for a basic memory manager
  */
 
+// BUG: Current test -> 6
+
 // Reminders:
 // - OAConfig is read only
 // - Stats is meant to be updated by the dev
@@ -30,6 +32,9 @@
 #include <cstring>
 
 using u8 = uint8_t;
+using u32 = uint32_t;
+
+static_assert(sizeof(u32) == 4, "uint32_t is not of size 4 bytes");
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
     page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config),
@@ -122,7 +127,10 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
     page_push_front(allocate_page());
   }
 
-  return object_pop_front();
+  GenericObject *output = object_pop_front();
+  header_update_alloc(output);
+
+  return output;
 }
 
 void ObjectAllocator::custom_mem_manager_free(void *object) {
@@ -145,6 +153,7 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
   }
 
   // TODO: Implement more thorough delete which will update the header and such (probably inside of this function)
+  header_update_dealloc(cast_object);
   object_push_front(cast_object, FREED_PATTERN);
 }
 
@@ -179,8 +188,6 @@ GenericObject *ObjectAllocator::object_pop_front() {
 
   GenericObject *output = free_objects_list;
   free_objects_list = free_objects_list->Next;
-
-  // TODO: Write header stuff here
 
   write_signature(output, ALLOCATED_PATTERN, object_size);
 
@@ -222,6 +229,8 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
+
+    header_initialize(current_object);
     object_push_front(current_object, UNALLOCATED_PATTERN);
 
     current_block += block_size;
@@ -315,8 +324,69 @@ GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) con
   return nullptr;
 }
 
-// HACK: Left off here, implementing the writing of the headers
-void ObjectAllocator::header_write(GenericObject *location) {};
+void ObjectAllocator::header_initialize(GenericObject *block_location) {
+  // TODO: implement cases for other headers
+  switch (config.HBlockInfo_.type_) {
+    case OAConfig::hbNone: break;
+    case OAConfig::hbBasic: header_basic_initialize(block_location); break;
+    case OAConfig::hbExtended: break;
+    case OAConfig::hbExternal: break;
+    default: break;
+  }
+};
+
+void ObjectAllocator::header_basic_initialize(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
+  *allocation_count = 0;
+
+  u8 *flag = writing_location + sizeof(u32);
+  (*flag) = 0;
+};
+
+// HACK: Left off here, implementing the initialization of the basic header
+void ObjectAllocator::header_update_alloc(GenericObject *block_location) {
+  // TODO: implement cases for other headers
+  switch (config.HBlockInfo_.type_) {
+    case OAConfig::hbNone: break;
+    case OAConfig::hbBasic: header_basic_update_alloc(block_location); break;
+    case OAConfig::hbExtended: break;
+    case OAConfig::hbExternal: break;
+    default: break;
+  }
+}
+
+void ObjectAllocator::header_basic_update_alloc(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_count) = static_cast<u32>(stats.Allocations_ + 1);
+
+  u8 *flag = writing_location + sizeof(u32);
+  (*flag) |= 1;
+}
+
+void ObjectAllocator::header_update_dealloc(GenericObject *block_location) {
+  // TODO: implement cases for other headers
+  switch (config.HBlockInfo_.type_) {
+    case OAConfig::hbNone: break;
+    case OAConfig::hbBasic: header_basic_update_dealloc(block_location); break;
+    case OAConfig::hbExtended: break;
+    case OAConfig::hbExternal: break;
+    default: break;
+  }
+}
+
+void ObjectAllocator::header_basic_update_dealloc(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_count) = 0;
+
+  u8 *flag = writing_location + sizeof(u32);
+  (*flag) &= 0;
+}
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
   switch (info.type_) {

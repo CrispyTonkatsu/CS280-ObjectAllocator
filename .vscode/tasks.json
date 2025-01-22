@@ -23,6 +23,14 @@
 			]
 		},
 		{
+			"label": "Run Test Num To File",
+			"type": "shell",
+			"command": "./build/driver_c ${input:test_num} > my_output.txt",
+			"dependsOn": [
+				"Build"
+			]
+		},
+		{
 			"label": "Valgrind Test",
 			"type": "shell",
 			"command": "valgrind -q --leak-check=full --show-reachable=yes --tool=memcheck ./build/driver_c",
