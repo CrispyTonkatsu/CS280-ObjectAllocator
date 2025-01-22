@@ -347,17 +347,68 @@ private:
 
   // Header Management
 
+  /**
+   * \brief This function will initialize the proper header as defined in the OA's config struct.
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_initialize(GenericObject *block_location);
 
+  /**
+   * \brief This function will initialize a basic header block
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_basic_initialize(GenericObject *block_location);
 
+  /**
+   * \brief This function will initialize an extended header block
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_extended_initialize(GenericObject *block_location);
+
+  /**
+   * \brief This function will update the allocation data of the corresponding header
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_update_alloc(GenericObject *block_location);
 
+  /**
+   * \brief This function will update a basic header's data
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_basic_update_alloc(GenericObject *block_location);
 
+  /**
+   * \brief This function will update the extended header due to an allocation
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_extended_update_alloc(GenericObject *block_location);
+
+  /**
+   * \brief This function will update the data for the corresponding header's deallocation
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_update_dealloc(GenericObject *block_location);
 
+  /**
+   * \brief This function will update a basic header's data for when it is deallocated
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
   void header_basic_update_dealloc(GenericObject *block_location);
+
+  /**
+   * \brief This function will update the extended header due to deallocation
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_extended_update_dealloc(GenericObject *block_location);
 
   // Page Management
 

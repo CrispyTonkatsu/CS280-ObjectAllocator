@@ -7,7 +7,7 @@
  * \brief Implementation for a basic memory manager
  */
 
-// BUG: Current test -> 6
+// BUG: Current test -> 7
 
 // Reminders:
 // - OAConfig is read only
@@ -32,8 +32,10 @@
 #include <cstring>
 
 using u8 = uint8_t;
+using u16 = uint16_t;
 using u32 = uint32_t;
 
+static_assert(sizeof(u16) == 2, "uint16_t is not of size 2 bytes");
 static_assert(sizeof(u32) == 4, "uint32_t is not of size 4 bytes");
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
@@ -329,29 +331,44 @@ void ObjectAllocator::header_initialize(GenericObject *block_location) {
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_initialize(block_location); break;
-    case OAConfig::hbExtended: break;
+    case OAConfig::hbExtended: header_extended_initialize(block_location); break;
     case OAConfig::hbExternal: break;
     default: break;
   }
-};
+}
 
 void ObjectAllocator::header_basic_initialize(GenericObject *block_location) {
   u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
 
-  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
-  *allocation_count = 0;
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  *allocation_number = 0;
 
   u8 *flag = writing_location + sizeof(u32);
   (*flag) = 0;
-};
+}
 
-// HACK: Left off here, implementing the initialization of the basic header
+void ObjectAllocator::header_extended_initialize(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  writing_location += config.HBlockInfo_.additional_;
+  u16 *use_counter = reinterpret_cast<u16 *>(writing_location);
+  (*use_counter) = 0;
+
+  writing_location += sizeof(u16);
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_number) = 0;
+
+  writing_location += sizeof(u32);
+  u8 *flag = writing_location;
+  (*flag) = 0;
+}
+
 void ObjectAllocator::header_update_alloc(GenericObject *block_location) {
   // TODO: implement cases for other headers
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_update_alloc(block_location); break;
-    case OAConfig::hbExtended: break;
+    case OAConfig::hbExtended: header_extended_update_alloc(block_location); break;
     case OAConfig::hbExternal: break;
     default: break;
   }
@@ -360,10 +377,26 @@ void ObjectAllocator::header_update_alloc(GenericObject *block_location) {
 void ObjectAllocator::header_basic_update_alloc(GenericObject *block_location) {
   u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
 
-  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
-  (*allocation_count) = static_cast<u32>(stats.Allocations_ + 1);
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_number) = static_cast<u32>(stats.Allocations_ + 1);
 
   u8 *flag = writing_location + sizeof(u32);
+  (*flag) |= 1;
+}
+
+void ObjectAllocator::header_extended_update_alloc(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  writing_location += config.HBlockInfo_.additional_;
+  u16 *use_counter = reinterpret_cast<u16 *>(writing_location);
+  (*use_counter)++;
+
+  writing_location += sizeof(u16);
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_number) = static_cast<u32>(stats.Allocations_ + 1);
+
+  writing_location += sizeof(u32);
+  u8 *flag = writing_location;
   (*flag) |= 1;
 }
 
@@ -372,7 +405,7 @@ void ObjectAllocator::header_update_dealloc(GenericObject *block_location) {
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_update_dealloc(block_location); break;
-    case OAConfig::hbExtended: break;
+    case OAConfig::hbExtended: header_extended_update_dealloc(block_location); break;
     case OAConfig::hbExternal: break;
     default: break;
   }
@@ -381,11 +414,23 @@ void ObjectAllocator::header_update_dealloc(GenericObject *block_location) {
 void ObjectAllocator::header_basic_update_dealloc(GenericObject *block_location) {
   u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
 
-  u32 *allocation_count = reinterpret_cast<u32 *>(writing_location);
-  (*allocation_count) = 0;
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_number) = 0;
 
   u8 *flag = writing_location + sizeof(u32);
-  (*flag) &= 0;
+  (*flag) &= ~1;
+}
+
+void ObjectAllocator::header_extended_update_dealloc(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  writing_location += config.HBlockInfo_.additional_ + sizeof(u16);
+  u32 *allocation_number = reinterpret_cast<u32 *>(writing_location);
+  (*allocation_number) = 0;
+
+  writing_location += sizeof(u32);
+  u8 *flag = writing_location;
+  (*flag) &= ~1;
 }
 
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
