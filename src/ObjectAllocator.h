@@ -319,7 +319,7 @@ private:
    * \param object The object to check
    * \return Whether the object has already been freed
    */
-  bool object_check_double_free(GenericObject *object) const;
+  bool object_check_is_free(GenericObject *object) const;
 
   /**
    * \brief Checks if the object is in the free_objects_list

@@ -7,7 +7,7 @@
  * \brief Implementation for a basic memory manager
  */
 
-// BUG: Current test -> 10
+// BUG: Current test -> 14
 
 // TODO: Document all code
 
@@ -29,12 +29,12 @@ static_assert(sizeof(u16) == 2, "uint16_t is not of size 2 bytes");
 static_assert(sizeof(u32) == 4, "uint32_t is not of size 4 bytes");
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
-    page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config),
-    block_size(calculate_block_size()), stats() {
+    page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config), block_size(0), stats() {
   this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
   this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
 
   // This needs to be called after the alignment data is calculated.
+  block_size = calculate_block_size();
   page_size = calculate_page_size();
 
   stats.ObjectSize_ = ObjectSize;
@@ -53,8 +53,6 @@ ObjectAllocator::~ObjectAllocator() {
 }
 
 void *ObjectAllocator::Allocate(const char *label) {
-  // TODO: Add debug checks
-
   GenericObject *output = nullptr;
 
   if (config.UseCPPMemManager_) {
@@ -75,8 +73,6 @@ void *ObjectAllocator::Allocate(const char *label) {
 }
 
 void ObjectAllocator::Free(void *Object) {
-  // TODO: Add debug checks
-
   if (config.UseCPPMemManager_) {
     cpp_mem_manager_free(Object);
   } else {
@@ -87,19 +83,54 @@ void ObjectAllocator::Free(void *Object) {
   stats.ObjectsInUse_--;
 }
 
-unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const {
-  // TODO: Implement this function
-  return 0;
+unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK fn) const {
+  GenericObject *current_page = page_list;
+  unsigned in_use_count = 0;
+
+  while (current_page != nullptr) {
+    u8 *object = reinterpret_cast<u8 *>(current_page) + sizeof(void *) + config.LeftAlignSize_ +
+                 config.HBlockInfo_.size_ + config.PadBytes_;
+
+    for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
+      if (!object_check_is_free(reinterpret_cast<GenericObject *>(object))) {
+        fn(object, object_size);
+        in_use_count++;
+      }
+
+      object += block_size;
+    }
+
+    current_page = current_page->Next;
+  }
+
+  return in_use_count;
 }
 
-unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK) const {
+unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK fn) const {
   if (!config.DebugOn_ || config.PadBytes_ == 0) {
     return 0;
   }
 
-  // TODO: Do the pad checking
+  GenericObject *current_page = page_list;
+  unsigned in_use_count = 0;
 
-  return 1;
+  while (current_page != nullptr) {
+    u8 *object = reinterpret_cast<u8 *>(current_page) + sizeof(void *) + config.LeftAlignSize_ +
+                 config.HBlockInfo_.size_ + config.PadBytes_;
+
+    for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
+      if (!object_validate_padding(reinterpret_cast<GenericObject *>(object))) {
+        fn(object, object_size);
+        in_use_count++;
+      }
+
+      object += block_size;
+    }
+
+    current_page = current_page->Next;
+  }
+
+  return in_use_count;
 }
 
 unsigned ObjectAllocator::FreeEmptyPages() { return 0; }
@@ -126,8 +157,6 @@ GenericObject *ObjectAllocator::cpp_mem_manager_allocate() {
 void ObjectAllocator::cpp_mem_manager_free(void *object) { delete[] static_cast<u8 *>(object); }
 
 GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *label) {
-  // TODO: No idea what the label is supposed to do.
-
   if (free_objects_list == nullptr) {
     page_push_front(allocate_page());
   }
@@ -148,11 +177,10 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
           OAException::E_BAD_BOUNDARY, "The memory address lies outside of the allocated blocks' boundaries");
     }
 
-    if (object_check_double_free(cast_object)) {
+    if (object_check_is_free(cast_object)) {
       throw OAException(OAException::E_MULTIPLE_FREE, "The object is being deallocated multiple times");
     }
 
-    // TODO: check for corruption on pad bytes
     if (!object_validate_padding(cast_object)) {
       throw OAException(
           OAException::E_CORRUPTED_BLOCK,
@@ -160,7 +188,6 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
     }
   }
 
-  // TODO: Implement more thorough delete which will update the header and such (probably inside of this function)
   header_update_dealloc(cast_object);
   object_push_front(cast_object, FREED_PATTERN);
 }
@@ -170,12 +197,9 @@ void ObjectAllocator::object_push_front(GenericObject *object, const unsigned ch
     return;
   }
 
-  // TODO: Probably add the signing and other writing for the object here.
+  // TODO: Implement inter alignment signature writing
   write_signature(object, signature, object_size);
 
-  if (config.DebugOn_) {
-    // TODO: Test padding for corruption
-  }
   // Writing padding
   u8 *raw_object = reinterpret_cast<u8 *>(object);
   if (config.PadBytes_ > 0) {
@@ -231,7 +255,7 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
 
   u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
 
-  // TODO: Implement alignment pattern writing
+  // TODO: Implement left alignment signature writing
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
@@ -270,15 +294,33 @@ GenericObject *ObjectAllocator::page_pop_front() {
   return output;
 }
 
-bool ObjectAllocator::object_check_double_free(GenericObject *object) const {
+bool ObjectAllocator::object_check_is_free(GenericObject *object) const {
   bool was_freed = false;
 
   // TODO: finish implementing all the other cases
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: was_freed = object_is_in_free_list(object); break;
-    case OAConfig::hbBasic: break;
-    case OAConfig::hbExtended: break;
-    case OAConfig::hbExternal: break;
+
+    case OAConfig::hbBasic: {
+      u8 *reading_location = reinterpret_cast<u8 *>(object) - config.PadBytes_ - config.HBlockInfo_.size_;
+      u8 *flag = reading_location + sizeof(u32);
+      was_freed = (*flag) == 0;
+    } break;
+
+    case OAConfig::hbExtended: {
+      u8 *reading_location = reinterpret_cast<u8 *>(object) - config.PadBytes_ - config.HBlockInfo_.size_;
+      reading_location += config.HBlockInfo_.additional_;
+      reading_location += sizeof(u16);
+      u8 *flag = reading_location + sizeof(u32);
+      was_freed = (*flag) == 0;
+    } break;
+
+    case OAConfig::hbExternal: {
+      u8 *reading_location = reinterpret_cast<u8 *>(object) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+      MemBlockInfo **header_ptr = reinterpret_cast<MemBlockInfo **>(reading_location);
+      was_freed = (*header_ptr) == nullptr;
+    } break;
   }
 
   // TODO: Consider whether this should be run for all cases or just no headers (user corruptions could lead to double
@@ -344,7 +386,7 @@ bool ObjectAllocator::object_validate_padding(GenericObject *object) const {
   }
 
   u8 *left_pad_start = reinterpret_cast<u8 *>(object) - config.PadBytes_;
-  u8 *right_pad_start = left_pad_start + object_size;
+  u8 *right_pad_start = reinterpret_cast<u8*>(object) + object_size;
   for (size_t i = 0; i < config.PadBytes_; i++) {
     u8 left_pad = *(left_pad_start + i);
     u8 right_pad = *(right_pad_start + i);
