@@ -9,7 +9,6 @@
 
 // TODO: Ask if the code needs to be documented both in header and implementation
 // TODO: Ask if we are allowed to use strlen and strcpy
-// TODO: fix valgrind in test 7
 
 #include "ObjectAllocator.h"
 #include <cstddef>
@@ -31,6 +30,8 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
 
   // This needs to be called after the alignment data is calculated.
   block_size = calculate_block_size();
+
+  // TODO: Fix this calculation
   page_size = calculate_page_size();
 
   stats.ObjectSize_ = ObjectSize;
@@ -199,7 +200,6 @@ void ObjectAllocator::object_push_front(GenericObject *object, const unsigned ch
     return;
   }
 
-  // TODO: Implement inter alignment signature writing
   write_signature(object, signature, object_size);
 
   // Writing padding
@@ -254,18 +254,21 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
   }
 
   u8 *raw_page = reinterpret_cast<u8 *>(page);
+  write_signature(page + config.LeftAlignSize_, ALIGN_PATTERN, config.LeftAlignSize_);
 
-  u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
-
-  // TODO: Implement left alignment signature writing
+  u8 *current_data = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
-    GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
+    GenericObject *current_object = reinterpret_cast<GenericObject *>(current_data);
 
     header_initialize(current_object);
     object_push_front(current_object, UNALLOCATED_PATTERN);
 
-    current_block += block_size;
+    if (i + 1 < config.ObjectsPerPage_) {
+      write_signature(current_data + object_size + config.PadBytes_, ALIGN_PATTERN, config.InterAlignSize_);
+    }
+
+    current_data += block_size;
   }
 
   page->Next = page_list;
@@ -570,7 +573,9 @@ size_t ObjectAllocator::calculate_left_alignment_size() const {
 
 size_t ObjectAllocator::calculate_inter_alignment_size() const {
   if (config.Alignment_ <= 0) return 0;
-  size_t remainder = block_size % config.Alignment_;
+  size_t chunk_size = get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size;
+
+  size_t remainder = chunk_size % config.Alignment_;
   return (remainder > 0) ? config.Alignment_ - remainder : 0;
 }
 
@@ -579,8 +584,10 @@ size_t ObjectAllocator::calculate_block_size() const {
 }
 
 size_t ObjectAllocator::calculate_page_size() const {
+  size_t chunk_size = get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size;
+
   size_t total = sizeof(void *) + config.LeftAlignSize_;
-  total += config.ObjectsPerPage_ * block_size;
+  total += config.ObjectsPerPage_ * chunk_size;
   total += (config.ObjectsPerPage_ - 1) * config.InterAlignSize_;
 
   return total;
