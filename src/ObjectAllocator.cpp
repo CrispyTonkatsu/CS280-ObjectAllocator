@@ -7,7 +7,7 @@
  * \brief Implementation for a basic memory manager
  */
 
-// BUG: Current test -> 8
+// BUG: Current test -> 10
 
 // TODO: Document all code
 
@@ -139,7 +139,6 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *label) {
 }
 
 void ObjectAllocator::custom_mem_manager_free(void *object) {
-  // TODO: Add the debug checks
 
   GenericObject *cast_object = static_cast<GenericObject *>(object);
 
@@ -149,11 +148,15 @@ void ObjectAllocator::custom_mem_manager_free(void *object) {
           OAException::E_BAD_BOUNDARY, "The memory address lies outside of the allocated blocks' boundaries");
     }
 
-    // TODO: Double Free: Checks that the blocks are not being freed multiple times
-    // - For no headers -> that the pointer is not inside any of the free_object_list data space.
-    // - For headers -> just check the flag for in use.
     if (object_check_double_free(cast_object)) {
       throw OAException(OAException::E_MULTIPLE_FREE, "The object is being deallocated multiple times");
+    }
+
+    // TODO: check for corruption on pad bytes
+    if (!object_validate_padding(cast_object)) {
+      throw OAException(
+          OAException::E_CORRUPTED_BLOCK,
+          "The object's padding bytes have been corrupted, check pointer math in your code");
     }
   }
 
@@ -228,9 +231,7 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
 
   u8 *current_block = raw_page + sizeof(void *) + config.LeftAlignSize_ + config.HBlockInfo_.size_ + config.PadBytes_;
 
-  if (config.DebugOn_) {
-    // TODO: Implement a signing function (debug patterns)
-  }
+  // TODO: Implement alignment pattern writing
 
   for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
     GenericObject *current_object = reinterpret_cast<GenericObject *>(current_block);
@@ -335,6 +336,25 @@ GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) con
   }
 
   return nullptr;
+}
+
+bool ObjectAllocator::object_validate_padding(GenericObject *object) const {
+  if (config.PadBytes_ == 0) {
+    return true;
+  }
+
+  u8 *left_pad_start = reinterpret_cast<u8 *>(object) - config.PadBytes_;
+  u8 *right_pad_start = left_pad_start + object_size;
+  for (size_t i = 0; i < config.PadBytes_; i++) {
+    u8 left_pad = *(left_pad_start + i);
+    u8 right_pad = *(right_pad_start + i);
+
+    if (left_pad != PAD_PATTERN || right_pad != PAD_PATTERN) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void ObjectAllocator::header_initialize(GenericObject *block_location) {

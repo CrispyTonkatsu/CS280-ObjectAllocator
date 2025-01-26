@@ -345,6 +345,14 @@ private:
    */
   GenericObject *object_is_inside_page(GenericObject *object) const;
 
+  /**
+   * \brief Checks if the object padding is corrupted
+   *
+   * \param object The object to check
+   * \return Whether the padding is valid
+   */
+  bool object_validate_padding(GenericObject *object) const;
+
   // Header Management
 
   /**
