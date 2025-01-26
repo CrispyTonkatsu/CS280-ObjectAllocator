@@ -273,7 +273,7 @@ private:
    *
    * \return Pointer to the object's location in memory
    */
-  GenericObject *cpp_mem_manager_allocate(const char *label);
+  GenericObject *cpp_mem_manager_allocate();
 
   /**
    * \brief Use the C++ native memory allocator to free an object from memory
@@ -369,11 +369,18 @@ private:
   void header_extended_initialize(GenericObject *block_location);
 
   /**
+   * \brief This function will initialize an external header block. This means it will set the header values to nullptr
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_external_initialize(GenericObject *block_location);
+
+  /**
    * \brief This function will update the allocation data of the corresponding header
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
-  void header_update_alloc(GenericObject *block_location);
+  void header_update_alloc(GenericObject *block_location, const char *label);
 
   /**
    * \brief This function will update a basic header's data
@@ -388,6 +395,14 @@ private:
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_extended_update_alloc(GenericObject *block_location);
+
+  /**
+   * \brief This function will update the external header due to an allocation. This means it will allocate the header
+   * with the corresponding data.
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_external_update_alloc(GenericObject *block_location, const char *label);
 
   /**
    * \brief This function will update the data for the corresponding header's deallocation
@@ -409,6 +424,19 @@ private:
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_extended_update_dealloc(GenericObject *block_location);
+
+  /** \brief This function will update the external header due to an allocation. This means it will allocate the header
+   * with the corresponding data.
+   *
+   * \param block_location Where the block is located (pointer to start of data)
+   */
+  void header_external_update_dealloc(GenericObject *block_location);
+
+  /** \brief This funciton will deallocate the label and external headers.
+   *
+   * \param header_ptr_ptr Pointer to the pointer for the header
+   */
+  void header_external_delete(MemBlockInfo **header_ptr_ptr);
 
   // Page Management
 

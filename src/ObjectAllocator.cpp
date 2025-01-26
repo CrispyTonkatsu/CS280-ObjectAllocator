@@ -7,19 +7,9 @@
  * \brief Implementation for a basic memory manager
  */
 
-// BUG: Current test -> 7
-
-// Reminders:
-// - OAConfig is read only
-// - Stats is meant to be updated by the dev
-// - static_cast only for void*, reinterpret_cast all other T
+// BUG: Current test -> 8
 
 // TODO: Document all code
-
-// TODO: Testing:
-// - Memory Allocation & Deletion
-// - Memory Alignment + Padding & Headers
-// - Correct Debug & Stats info
 
 // TODO: Check that all the debug only features don't trigger when debug is off
 
@@ -44,7 +34,7 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
   this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
   this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
 
-  // TODO: put this in the initializer list
+  // This needs to be called after the alignment data is calculated.
   page_size = calculate_page_size();
 
   stats.ObjectSize_ = ObjectSize;
@@ -68,7 +58,7 @@ void *ObjectAllocator::Allocate(const char *label) {
   GenericObject *output = nullptr;
 
   if (config.UseCPPMemManager_) {
-    output = cpp_mem_manager_allocate(label);
+    output = cpp_mem_manager_allocate();
 
   } else {
     output = custom_mem_manager_allocate(label);
@@ -97,9 +87,20 @@ void ObjectAllocator::Free(void *Object) {
   stats.ObjectsInUse_--;
 }
 
-unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const { return 0; }
+unsigned ObjectAllocator::DumpMemoryInUse(DUMPCALLBACK) const {
+  // TODO: Implement this function
+  return 0;
+}
 
-unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK) const { return 0; }
+unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK) const {
+  if (!config.DebugOn_ || config.PadBytes_ == 0) {
+    return 0;
+  }
+
+  // TODO: Do the pad checking
+
+  return 1;
+}
 
 unsigned ObjectAllocator::FreeEmptyPages() { return 0; }
 
@@ -118,11 +119,13 @@ OAConfig ObjectAllocator::GetConfig() const { return config; }
 
 OAStats ObjectAllocator::GetStats() const { return stats; }
 
-GenericObject *ObjectAllocator::cpp_mem_manager_allocate(const char *) { return nullptr; }
+GenericObject *ObjectAllocator::cpp_mem_manager_allocate() {
+  return reinterpret_cast<GenericObject *>(new u8[object_size]);
+}
 
-void ObjectAllocator::cpp_mem_manager_free(void *) {}
+void ObjectAllocator::cpp_mem_manager_free(void *object) { delete[] static_cast<u8 *>(object); }
 
-GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
+GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *label) {
   // TODO: No idea what the label is supposed to do.
 
   if (free_objects_list == nullptr) {
@@ -130,7 +133,7 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
   }
 
   GenericObject *output = object_pop_front();
-  header_update_alloc(output);
+  header_update_alloc(output, label);
 
   return output;
 }
@@ -138,7 +141,7 @@ GenericObject *ObjectAllocator::custom_mem_manager_allocate(const char *) {
 void ObjectAllocator::custom_mem_manager_free(void *object) {
   // TODO: Add the debug checks
 
-  GenericObject *cast_object = reinterpret_cast<GenericObject *>(object);
+  GenericObject *cast_object = static_cast<GenericObject *>(object);
 
   if (config.DebugOn_) {
     if (!object_validate_location(cast_object)) {
@@ -244,7 +247,7 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
   stats.PagesInUse_++;
 }
 
-// TODO: Make sure to implement more checking before just giving a page away.
+// TODO: Confirm that there are no other things that need to be done in the destructor
 GenericObject *ObjectAllocator::page_pop_front() {
   if (page_list == nullptr) {
     return nullptr;
@@ -252,6 +255,15 @@ GenericObject *ObjectAllocator::page_pop_front() {
 
   GenericObject *output = page_list;
   page_list = page_list->Next;
+
+  if (config.HBlockInfo_.type_ == OAConfig::hbExternal) {
+    u8 *header_location = reinterpret_cast<u8 *>(output) + sizeof(void *) + config.LeftAlignSize_;
+    for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
+      MemBlockInfo **header_ptr_ptr = reinterpret_cast<MemBlockInfo **>(header_location);
+      header_external_delete(header_ptr_ptr);
+      header_location += block_size;
+    }
+  }
 
   stats.PagesInUse_--;
   return output;
@@ -279,7 +291,6 @@ bool ObjectAllocator::object_is_in_free_list(GenericObject *object) const {
   GenericObject *current_object = free_objects_list;
 
   while (current_object != nullptr) {
-    // TODO: Ask whether we need to also check that object is not pointing to somewhere inside the block
     if (object == current_object) {
       return true;
     }
@@ -327,12 +338,11 @@ GenericObject *ObjectAllocator::object_is_inside_page(GenericObject *object) con
 }
 
 void ObjectAllocator::header_initialize(GenericObject *block_location) {
-  // TODO: implement cases for other headers
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_initialize(block_location); break;
     case OAConfig::hbExtended: header_extended_initialize(block_location); break;
-    case OAConfig::hbExternal: break;
+    case OAConfig::hbExternal: header_external_initialize(block_location); break;
     default: break;
   }
 }
@@ -363,13 +373,19 @@ void ObjectAllocator::header_extended_initialize(GenericObject *block_location) 
   (*flag) = 0;
 }
 
-void ObjectAllocator::header_update_alloc(GenericObject *block_location) {
-  // TODO: implement cases for other headers
+void ObjectAllocator::header_external_initialize(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  MemBlockInfo **header_ptr = reinterpret_cast<MemBlockInfo **>(writing_location);
+  *header_ptr = nullptr;
+}
+
+void ObjectAllocator::header_update_alloc(GenericObject *block_location, const char *label) {
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_update_alloc(block_location); break;
     case OAConfig::hbExtended: header_extended_update_alloc(block_location); break;
-    case OAConfig::hbExternal: break;
+    case OAConfig::hbExternal: header_external_update_alloc(block_location, label); break;
     default: break;
   }
 }
@@ -400,13 +416,30 @@ void ObjectAllocator::header_extended_update_alloc(GenericObject *block_location
   (*flag) |= 1;
 }
 
+void ObjectAllocator::header_external_update_alloc(GenericObject *block_location, const char *label) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  MemBlockInfo **header_ptr_ptr = reinterpret_cast<MemBlockInfo **>(writing_location);
+  *header_ptr_ptr = new MemBlockInfo;
+
+  (*header_ptr_ptr)->in_use = true;
+  (*header_ptr_ptr)->alloc_num = stats.Allocations_ + 1;
+
+  if (label != nullptr) {
+    char *label_copy = new char[strlen(label) + 1];
+    strcpy(label_copy, label);
+    (*header_ptr_ptr)->label = label_copy;
+  } else {
+    (*header_ptr_ptr)->label = nullptr;
+  }
+}
+
 void ObjectAllocator::header_update_dealloc(GenericObject *block_location) {
-  // TODO: implement cases for other headers
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: break;
     case OAConfig::hbBasic: header_basic_update_dealloc(block_location); break;
     case OAConfig::hbExtended: header_extended_update_dealloc(block_location); break;
-    case OAConfig::hbExternal: break;
+    case OAConfig::hbExternal: header_external_update_dealloc(block_location); break;
     default: break;
   }
 }
@@ -433,6 +466,27 @@ void ObjectAllocator::header_extended_update_dealloc(GenericObject *block_locati
   (*flag) &= ~1;
 }
 
+void ObjectAllocator::header_external_update_dealloc(GenericObject *block_location) {
+  u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  MemBlockInfo **header_ptr_ptr = reinterpret_cast<MemBlockInfo **>(writing_location);
+  header_external_delete(header_ptr_ptr);
+}
+
+void ObjectAllocator::header_external_delete(MemBlockInfo **header_ptr_ptr) {
+  if (header_ptr_ptr == nullptr || *header_ptr_ptr == nullptr) {
+    return;
+  }
+
+  MemBlockInfo *header_ptr = *header_ptr_ptr;
+  if (header_ptr->label != nullptr) {
+    delete[] header_ptr->label;
+  }
+  delete header_ptr;
+
+  *header_ptr_ptr = nullptr;
+}
+
 size_t ObjectAllocator::get_header_size(OAConfig::HeaderBlockInfo info) const {
   switch (info.type_) {
     case OAConfig::hbNone: return 0;
@@ -456,7 +510,7 @@ size_t ObjectAllocator::calculate_inter_alignment_size() const {
 }
 
 size_t ObjectAllocator::calculate_block_size() const {
-  return get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size;
+  return get_header_size(config.HBlockInfo_) + (2 * config.PadBytes_) + object_size + config.InterAlignSize_;
 }
 
 size_t ObjectAllocator::calculate_page_size() const {
