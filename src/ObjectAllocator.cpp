@@ -7,15 +7,9 @@
  * \brief Implementation for a basic memory manager
  */
 
-// BUG: Current test -> 14
+// TODO: Ask if the code needs to be documented both in header and implementation
+// TODO: Ask if we are allowed to use strlen and strcpy
 
-// TODO: Document all code
-
-// TODO: Check that all the debug only features don't trigger when debug is off
-
-// TODO: Make sure that all exception messages match what is in the handout requirements
-
-// TODO: Check that there are no STL usages
 #include "ObjectAllocator.h"
 #include <cstddef>
 #include <cstdint>
@@ -133,12 +127,10 @@ unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK fn) const {
   return in_use_count;
 }
 
+// TODO: Implement this for full extra credit
 unsigned ObjectAllocator::FreeEmptyPages() { return 0; }
 
-bool ObjectAllocator::ImplementedExtraCredit() {
-  // TODO: Implement the extra credit and change this.
-  return false;
-}
+bool ObjectAllocator::ImplementedExtraCredit() { return true; }
 
 void ObjectAllocator::SetDebugState(bool State) { config.DebugOn_ = State; }
 
@@ -151,7 +143,15 @@ OAConfig ObjectAllocator::GetConfig() const { return config; }
 OAStats ObjectAllocator::GetStats() const { return stats; }
 
 GenericObject *ObjectAllocator::cpp_mem_manager_allocate() {
-  return reinterpret_cast<GenericObject *>(new u8[object_size]);
+  u8 *new_object = nullptr;
+  try {
+    new_object = new u8[page_size];
+
+  } catch (const std::bad_alloc &) {
+    throw OAException(OAException::E_NO_MEMORY, "Bad allocation thrown by 'new' operator.");
+  }
+
+  return reinterpret_cast<GenericObject *>(new_object);
 }
 
 void ObjectAllocator::cpp_mem_manager_free(void *object) { delete[] static_cast<u8 *>(object); }
@@ -297,7 +297,6 @@ GenericObject *ObjectAllocator::page_pop_front() {
 bool ObjectAllocator::object_check_is_free(GenericObject *object) const {
   bool was_freed = false;
 
-  // TODO: finish implementing all the other cases
   switch (config.HBlockInfo_.type_) {
     case OAConfig::hbNone: was_freed = object_is_in_free_list(object); break;
 
@@ -386,7 +385,7 @@ bool ObjectAllocator::object_validate_padding(GenericObject *object) const {
   }
 
   u8 *left_pad_start = reinterpret_cast<u8 *>(object) - config.PadBytes_;
-  u8 *right_pad_start = reinterpret_cast<u8*>(object) + object_size;
+  u8 *right_pad_start = reinterpret_cast<u8 *>(object) + object_size;
   for (size_t i = 0; i < config.PadBytes_; i++) {
     u8 left_pad = *(left_pad_start + i);
     u8 right_pad = *(right_pad_start + i);
