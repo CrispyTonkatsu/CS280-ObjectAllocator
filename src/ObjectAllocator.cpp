@@ -9,6 +9,7 @@
 
 // TODO: Ask if the code needs to be documented both in header and implementation
 // TODO: Ask if we are allowed to use strlen and strcpy
+// TODO: fix valgrind in test 7
 
 #include "ObjectAllocator.h"
 #include <cstddef>
@@ -23,7 +24,8 @@ static_assert(sizeof(u16) == 2, "uint16_t is not of size 2 bytes");
 static_assert(sizeof(u32) == 4, "uint32_t is not of size 4 bytes");
 
 ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
-    page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config), block_size(0), stats() {
+    page_list(nullptr), free_objects_list(nullptr), object_size(ObjectSize), config(config), block_size(0),
+    page_size(0), stats() {
   this->config.LeftAlignSize_ = static_cast<unsigned>(calculate_left_alignment_size());
   this->config.InterAlignSize_ = static_cast<unsigned>(calculate_inter_alignment_size());
 
@@ -420,6 +422,8 @@ void ObjectAllocator::header_basic_initialize(GenericObject *block_location) {
 
 void ObjectAllocator::header_extended_initialize(GenericObject *block_location) {
   u8 *writing_location = reinterpret_cast<u8 *>(block_location) - config.PadBytes_ - config.HBlockInfo_.size_;
+
+  memset(writing_location, 0, config.HBlockInfo_.additional_);
 
   writing_location += config.HBlockInfo_.additional_;
   u16 *use_counter = reinterpret_cast<u16 *>(writing_location);
