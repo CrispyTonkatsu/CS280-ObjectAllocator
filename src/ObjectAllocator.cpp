@@ -8,11 +8,9 @@
  */
 
 // TODO: Ask if the code needs to be documented both in header and implementation
-// TODO: Ask if we are allowed to use strlen and strcpy
 
 #include "ObjectAllocator.h"
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 
 using u8 = uint8_t;
@@ -30,8 +28,6 @@ ObjectAllocator::ObjectAllocator(size_t ObjectSize, const OAConfig &config) :
 
   // This needs to be called after the alignment data is calculated.
   block_size = calculate_block_size();
-
-  // TODO: Fix this calculation
   page_size = calculate_page_size();
 
   stats.ObjectSize_ = ObjectSize;
@@ -130,8 +126,13 @@ unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK fn) const {
   return in_use_count;
 }
 
-// TODO: Implement this for full extra credit
-unsigned ObjectAllocator::FreeEmptyPages() { return 0; }
+unsigned ObjectAllocator::FreeEmptyPages() {
+  unsigned deleted = 0;
+
+  // TODO: Implement this for full extra credit
+
+  return deleted;
+}
 
 bool ObjectAllocator::ImplementedExtraCredit() { return true; }
 
@@ -277,7 +278,6 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
   stats.PagesInUse_++;
 }
 
-// TODO: Confirm that there are no other things that need to be done in the destructor
 GenericObject *ObjectAllocator::page_pop_front() {
   if (page_list == nullptr) {
     return nullptr;
@@ -326,10 +326,6 @@ bool ObjectAllocator::object_check_is_free(GenericObject *object) const {
       was_freed = (*header_ptr) == nullptr;
     } break;
   }
-
-  // TODO: Consider whether this should be run for all cases or just no headers (user corruptions could lead to double
-  // free if they change the header)
-  /*was_freed = object_is_in_free_list(object);*/
 
   return was_freed;
 }
@@ -519,7 +515,8 @@ void ObjectAllocator::header_basic_update_dealloc(GenericObject *block_location)
   (*allocation_number) = 0;
 
   u8 *flag = writing_location + sizeof(u32);
-  (*flag) &= ~1;
+  int cast_flag = static_cast<int>(*flag);
+  (*flag) = static_cast<u8>(cast_flag & ~1);
 }
 
 void ObjectAllocator::header_extended_update_dealloc(GenericObject *block_location) {
@@ -531,7 +528,8 @@ void ObjectAllocator::header_extended_update_dealloc(GenericObject *block_locati
 
   writing_location += sizeof(u32);
   u8 *flag = writing_location;
-  (*flag) &= ~1;
+  int cast_flag = static_cast<int>(*flag);
+  (*flag) = static_cast<u8>(cast_flag & ~1);
 }
 
 void ObjectAllocator::header_external_update_dealloc(GenericObject *block_location) {
