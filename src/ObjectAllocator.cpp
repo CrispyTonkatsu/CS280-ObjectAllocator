@@ -127,9 +127,6 @@ unsigned ObjectAllocator::ValidatePages(VALIDATECALLBACK fn) const {
 }
 
 unsigned ObjectAllocator::FreeEmptyPages() {
-  // TODO: Implement this for full extra credit
-  // The helper function is remove_node(GenericObject* head, GenericObject* to_remove))
-
   GenericObject *current_page = page_list;
   unsigned deleted = 0;
 
@@ -137,7 +134,6 @@ unsigned ObjectAllocator::FreeEmptyPages() {
     u8 *objects_start = reinterpret_cast<u8 *>(current_page) + sizeof(void *) + config.LeftAlignSize_ +
                         config.HBlockInfo_.size_ + config.PadBytes_;
 
-    //  - Check each block as to whether its in use or not
     bool empty_page = true;
     u8 *current_object = objects_start;
     for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
@@ -148,11 +144,17 @@ unsigned ObjectAllocator::FreeEmptyPages() {
       current_object += block_size;
     }
 
+    // HACK: The helper function is remove_node(GenericObject* head, GenericObject* to_remove))
     if (empty_page) {
-      // TODO: Remove all blocks from the free_list
-      u8 *current_object = objects_start;
+      current_object = objects_start;
+      for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
+        // TODO: Remove current_block from free_objects_list
+        current_object += block_size;
+      }
 
       // TODO: Delete page from page_list (make a helper method)
+
+      stats.PagesInUse_--;
       deleted++;
     }
 
@@ -306,7 +308,6 @@ void ObjectAllocator::page_push_front(GenericObject *page) {
   stats.PagesInUse_++;
 }
 
-// TODO: Refactor the removing function part (aka the external stuff and stats usage)
 GenericObject *ObjectAllocator::page_pop_front() {
   if (page_list == nullptr) {
     return nullptr;
