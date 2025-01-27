@@ -7,7 +7,7 @@
  * \brief Implementation for a basic memory manager
  */
 
-// TODO: Document the interface functions
+// TODO: Document the public functions
 // TODO: Test the free empty pages algorithm just to make sure
 
 #include "ObjectAllocator.h"
