@@ -7,7 +7,8 @@
  * \brief Implementation for a basic memory manager
  */
 
-// TODO: Ask if the code needs to be documented both in header and implementation
+// TODO: Document the interface functions
+// TODO: Test the free empty pages algorithm just to make sure
 
 #include "ObjectAllocator.h"
 #include <cstddef>
@@ -131,34 +132,43 @@ unsigned ObjectAllocator::FreeEmptyPages() {
   unsigned deleted = 0;
 
   while (current_page != nullptr) {
+    GenericObject *next_page = current_page->Next;
+
     u8 *objects_start = reinterpret_cast<u8 *>(current_page) + sizeof(void *) + config.LeftAlignSize_ +
                         config.HBlockInfo_.size_ + config.PadBytes_;
 
     bool empty_page = true;
     u8 *current_object = objects_start;
+
     for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
       if (!object_check_is_free(reinterpret_cast<GenericObject *>(current_object))) {
         empty_page = false;
+        break;
       }
 
       current_object += block_size;
     }
 
-    // HACK: The helper function is remove_node(GenericObject* head, GenericObject* to_remove))
     if (empty_page) {
       current_object = objects_start;
+
       for (size_t i = 0; i < config.ObjectsPerPage_; i++) {
-        // TODO: Remove current_block from free_objects_list
+        generic_object_remove(free_objects_list, reinterpret_cast<GenericObject *>(current_object));
+
         current_object += block_size;
+        if (stats.FreeObjects_ > 0) {
+          stats.FreeObjects_--;
+        }
       }
 
-      // TODO: Delete page from page_list (make a helper method)
+      generic_object_remove(page_list, current_page);
+      delete[] reinterpret_cast<u8 *>(current_page);
 
       stats.PagesInUse_--;
       deleted++;
     }
 
-    current_page = current_page->Next;
+    current_page = next_page;
   }
 
   return deleted;
@@ -330,15 +340,15 @@ GenericObject *ObjectAllocator::page_pop_front() {
 }
 
 bool ObjectAllocator::object_check_is_free(GenericObject *object) const {
-  bool was_freed = false;
+  bool is_free = false;
 
   switch (config.HBlockInfo_.type_) {
-    case OAConfig::hbNone: was_freed = object_is_in_free_list(object); break;
+    case OAConfig::hbNone: is_free = object_is_in_free_list(object); break;
 
     case OAConfig::hbBasic: {
       u8 *reading_location = reinterpret_cast<u8 *>(object) - config.PadBytes_ - config.HBlockInfo_.size_;
       u8 *flag = reading_location + sizeof(u32);
-      was_freed = (*flag) == 0;
+      is_free = (*flag) == 0;
     } break;
 
     case OAConfig::hbExtended: {
@@ -346,18 +356,18 @@ bool ObjectAllocator::object_check_is_free(GenericObject *object) const {
       reading_location += config.HBlockInfo_.additional_;
       reading_location += sizeof(u16);
       u8 *flag = reading_location + sizeof(u32);
-      was_freed = (*flag) == 0;
+      is_free = (*flag) == 0;
     } break;
 
     case OAConfig::hbExternal: {
       u8 *reading_location = reinterpret_cast<u8 *>(object) - config.PadBytes_ - config.HBlockInfo_.size_;
 
       MemBlockInfo **header_ptr = reinterpret_cast<MemBlockInfo **>(reading_location);
-      was_freed = (*header_ptr) == nullptr;
+      is_free = (*header_ptr) == nullptr;
     } break;
   }
 
-  return was_freed;
+  return is_free;
 }
 
 bool ObjectAllocator::object_is_in_free_list(GenericObject *object) const {
@@ -640,4 +650,26 @@ void ObjectAllocator::write_signature(u8 *location, const unsigned char pattern,
 bool ObjectAllocator::is_in_range(u8 *start, size_t length, u8 *address) const {
   ptrdiff_t offset = address - start;
   return 0 < offset && offset < static_cast<intptr_t>(length);
+}
+
+void ObjectAllocator::generic_object_remove(GenericObject *&head, GenericObject *to_remove) {
+  GenericObject *current_object = head;
+  GenericObject *previous_object = nullptr;
+
+  while (current_object != nullptr) {
+    if (current_object == to_remove) {
+
+      if (previous_object == nullptr) {
+        head = current_object->Next;
+
+      } else {
+        previous_object->Next = current_object->Next;
+      }
+
+      return;
+    }
+
+    previous_object = current_object;
+    current_object = current_object->Next;
+  }
 }

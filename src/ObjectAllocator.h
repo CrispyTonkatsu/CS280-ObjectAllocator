@@ -538,6 +538,14 @@ private:
    * \return Whether the address is inside of the provided range
    */
   bool is_in_range(uint8_t *start, size_t length, uint8_t *address) const;
+
+  /**
+   * \brief This function will remove a node from the given linked list
+   *
+   * \param head The head of the list in which the node is in.
+   * \param to_remove The node in the list to remove
+   */
+  void generic_object_remove(GenericObject *&head, GenericObject *to_remove);
 };
 
 #endif

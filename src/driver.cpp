@@ -475,16 +475,16 @@ void TestFreeEmptyPages4(void) {
     }
     PrintConfig(oa);
     PrintCounts(oa);
-    DumpPages(oa, width);
+    /*DumpPages(oa, width);*/
 
     Shuffle(ptrs, total);
     for (int i = 0; i < total - 5; i++) {
       oa->Free(ptrs[i]);
-      PrintCounts(oa);
-      DumpPages(oa, width);
+      /*PrintCounts(oa);*/
+      /*DumpPages(oa, width);*/
     }
-    // PrintCounts(oa);
-    // DumpPages(oa, width);
+    PrintCounts(oa);
+    /*DumpPages(oa, width);*/
 
     unsigned count = oa->FreeEmptyPages();
     PrintCounts(oa);
