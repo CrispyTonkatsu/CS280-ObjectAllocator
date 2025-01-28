@@ -7,8 +7,6 @@
  * \brief Implementation for a basic memory manager
  */
 
-// TODO: Copy the documentation to here
-
 #include "ObjectAllocator.h"
 #include <cstddef>
 #include <cstring>
