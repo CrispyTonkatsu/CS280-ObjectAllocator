@@ -207,8 +207,16 @@ struct MemBlockInfo {
 class ObjectAllocator {
 public:
   // Defined by the client (pointer to a block, size of block)
-  typedef void (*DUMPCALLBACK)(const void *, size_t); //!< Callback function when dumping memory leaks
-  typedef void (*VALIDATECALLBACK)(const void *, size_t); //!< Callback function when validating blocks
+
+  /*!
+   * \brief Callback function when dumping memory leaks
+   */
+  typedef void (*DUMPCALLBACK)(const void *, size_t);
+
+  /*!
+   * \brief Callback function when validating blocks
+   */
+  typedef void (*VALIDATECALLBACK)(const void *, size_t);
 
   // Predefined values for memory signatures
   static const unsigned char UNALLOCATED_PATTERN = 0xAA; //!< New memory never given to the client
@@ -217,39 +225,104 @@ public:
   static const unsigned char PAD_PATTERN = 0xDD; //!< Pad signature to detect buffer over/under flow
   static const unsigned char ALIGN_PATTERN = 0xEE; //!< For the alignment bytes
 
-  // Creates the ObjectManager per the specified values
-  // Throws an exception if the construction fails. (Memory allocation problem)
+  /*!
+   * \brief Creates the ObjectManager per the specified values. Throws an exception if the construction fails.
+   * (Memory allocation problem)
+   *
+   * \param ObjectSize The size to allocate for each object
+   * \param config The configuration which the allocator will use
+   */
   ObjectAllocator(size_t ObjectSize, const OAConfig &config);
 
-  // Destroys the ObjectManager (never throws)
+  /*!
+   * \brief Destroys the ObjectManager (never throws)
+   */
   ~ObjectAllocator();
 
-  // Take an object from the free list and give it to the client (simulates new)
-  // Throws an exception if the object can't be allocated. (Memory allocation problem)
+  /*!
+   * \brief Take an object from the free list and give it to the client (simulates new). Throws an exception if the
+   * object can't be allocated. (Memory allocation problem)
+   *
+   * \param label The label to put in the external header
+   *
+   * \return Pointer to the allocated block
+   */
   void *Allocate(const char *label = 0);
 
-  // Returns an object to the free list for the client (simulates delete)
-  // Throws an exception if the the object can't be freed. (Invalid object)
+  /*!
+   * \brief Returns an object to the free list for the client (simulates delete). Throws an exception if the the object
+   * can't be freed. (Invalid object)
+   *
+   * \param Object Pointer to the block to deallocate
+   */
   void Free(void *Object);
 
-  // Calls the callback fn for each block still in use
+  /*!
+   * \brief Calls the callback fn for each block still in use
+   *
+   * \param fn Callback to call for each block
+   *
+   * \return Amount of blocks still in use
+   */
   unsigned DumpMemoryInUse(DUMPCALLBACK fn) const;
 
-  // Calls the callback fn for each block that is potentially corrupted
+  /*!
+   * \brief Calls the callback fn for each block that is potentially corrupted
+   *
+   * \param fn Callback to call for each block
+   *
+   * \return Amount of blocks corrupted
+   */
   unsigned ValidatePages(VALIDATECALLBACK fn) const;
 
-  // Frees all empty pages (extra credit)
+  /*!
+   * \brief Frees all empty pages
+   */
   unsigned FreeEmptyPages();
 
-  // Returns true if FreeEmptyPages and alignments are implemented
+  /*!
+   * \brief Returns true if FreeEmptyPages and alignments are implemented
+   *
+   * \return Whether extra credit was implemented
+   */
   static bool ImplementedExtraCredit();
 
   // Testing/Debugging/Statistic methods
-  void SetDebugState(bool State); // true=enable, false=disable
-  const void *GetFreeList() const; // returns a pointer to the internal free list
-  const void *GetPageList() const; // returns a pointer to the internal page list
-  OAConfig GetConfig() const; // returns the configuration parameters
-  OAStats GetStats() const; // returns the statistics for the allocator
+
+  /*!
+   * \brief Modifies the debug state
+   *
+   * \param State Whether to enable or disable debug features
+   */
+  void SetDebugState(bool State);
+
+  /*!
+   * \brief Getter for the list of free objects in the allocator
+   *
+   * \return Pointer to the head of the list
+   */
+  const void *GetFreeList() const;
+
+  /*!
+   * \brief Getter for the list of pages being used by the allocator
+   *
+   * \return Pointer to the head of the list
+   */
+  const void *GetPageList() const;
+
+  /*!
+   * \brief Getter for the configuration of the allocator
+   *
+   * \return The configuration of the allocator
+   */
+  OAConfig GetConfig() const;
+
+  /*!
+   * \brief Getter for the statistics of the allocator
+   *
+   * \return The statistics of the allocator
+   */
+  OAStats GetStats() const;
 
   // Prevent copy construction and assignment
   ObjectAllocator(const ObjectAllocator &oa) = delete; //!< Do not implement!
@@ -268,28 +341,28 @@ private:
 
   // Top-level private methods
 
-  /**
+  /*!
    * \brief Use the C++ native memory allocator to allocate an object
    *
    * \return Pointer to the object's location in memory
    */
   GenericObject *cpp_mem_manager_allocate();
 
-  /**
+  /*!
    * \brief Use the C++ native memory allocator to free an object from memory
    *
    * \param object Pointer to the object to free
    */
   void cpp_mem_manager_free(void *object);
 
-  /**
+  /*!
    * \brief Use the custom object allocator to allocate an object in memory
    *
    * \return Pointer to the object's location in memory
    */
   GenericObject *custom_mem_manager_allocate(const char *label);
 
-  /**
+  /*!
    * \brief Use the custom memory allocator to free an object from memory
    *
    * \param object Pointer to the object to free
@@ -298,7 +371,7 @@ private:
 
   // Object Management
 
-  /**
+  /*!
    * \brief Links object in such a way that it is the front of the free object list
    *
    * \param object The object that will be inserted into the linked list
@@ -306,14 +379,14 @@ private:
    */
   void object_push_front(GenericObject *object, const unsigned char signature);
 
-  /**
+  /*!
    * \brief Returns the first object in the free_objects_list
    *
    * \return The pointer to the object's location
    */
   GenericObject *object_pop_front();
 
-  /**
+  /*!
    * \brief Checks if the object is already free
    *
    * \param object The object to check
@@ -321,7 +394,7 @@ private:
    */
   bool object_check_is_free(GenericObject *object) const;
 
-  /**
+  /*!
    * \brief Checks if the object is in the free_objects_list
    *
    * \param object The object to look for in the list
@@ -329,7 +402,7 @@ private:
    */
   bool object_is_in_free_list(GenericObject *object) const;
 
-  /**
+  /*!
    * \brief Checks if the pointer is a valid pointer to a block
    *
    * \param location The location to validate
@@ -337,7 +410,7 @@ private:
    */
   bool object_validate_location(GenericObject *location) const;
 
-  /**
+  /*!
    * \brief Checks if the object is in any of the allocated pages
    *
    * \param object The object to look for in the pages
@@ -345,7 +418,7 @@ private:
    */
   GenericObject *object_is_inside_page(GenericObject *object) const;
 
-  /**
+  /*!
    * \brief Checks if the object padding is corrupted
    *
    * \param object The object to check
@@ -355,56 +428,56 @@ private:
 
   // Header Management
 
-  /**
+  /*!
    * \brief This function will initialize the proper header as defined in the OA's config struct.
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_initialize(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will initialize a basic header block
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_basic_initialize(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will initialize an extended header block
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_extended_initialize(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will initialize an external header block. This means it will set the header values to nullptr
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_external_initialize(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will update the allocation data of the corresponding header
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_update_alloc(GenericObject *block_location, const char *label);
 
-  /**
+  /*!
    * \brief This function will update a basic header's data
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_basic_update_alloc(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will update the extended header due to an allocation
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_extended_update_alloc(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will update the external header due to an allocation. This means it will allocate the header
    * with the corresponding data.
    *
@@ -412,35 +485,37 @@ private:
    */
   void header_external_update_alloc(GenericObject *block_location, const char *label);
 
-  /**
+  /*!
    * \brief This function will update the data for the corresponding header's deallocation
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_update_dealloc(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will update a basic header's data for when it is deallocated
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_basic_update_dealloc(GenericObject *block_location);
 
-  /**
+  /*!
    * \brief This function will update the extended header due to deallocation
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_extended_update_dealloc(GenericObject *block_location);
 
-  /** \brief This function will update the external header due to an allocation. This means it will allocate the header
+  /*!
+   * \brief This function will update the external header due to an allocation. This means it will allocate the header
    * with the corresponding data.
    *
    * \param block_location Where the block is located (pointer to start of data)
    */
   void header_external_update_dealloc(GenericObject *block_location);
 
-  /** \brief This funciton will deallocate the label and external headers.
+  /*!
+   * \brief This funciton will deallocate the label and external headers.
    *
    * \param header_ptr_ptr Pointer to the pointer for the header
    */
@@ -448,14 +523,14 @@ private:
 
   // Page Management
 
-  /**
+  /*!
    * \brief Factory method for a page in memory.
    *
    * \return Pointer to allocated page
    */
   GenericObject *allocate_page();
 
-  /**
+  /*!
    * \brief Updates `free_object_list` to include the pointers to the next available blocks. It also adds the page to
    * the `page_list`.
    *
@@ -463,7 +538,7 @@ private:
    */
   void page_push_front(GenericObject *page);
 
-  /**
+  /*!
    * \brief Returns the first page in the list. It will not check if a page has objects in use or not.
    *
    * \return The page at the front of the list
@@ -472,7 +547,7 @@ private:
 
   // Calculations
 
-  /**
+  /*!
    * \brief Returns the header size for the given info
    *
    * \param info The structure of the header
@@ -480,28 +555,28 @@ private:
    */
   size_t get_header_size(OAConfig::HeaderBlockInfo info) const;
 
-  /**
+  /*!
    * \brief Returns the left alignment size
    *
    * \return The size of the left alignment bytes
    */
   size_t calculate_left_alignment_size() const;
 
-  /**
+  /*!
    * \brief Returns the inter alignment size
    *
    * \return The size of the inter alignment bytes
    */
   size_t calculate_inter_alignment_size() const;
 
-  /**
+  /*!
    * \brief Returns the size of a block with the current config
    *
    * \return The size of a block in a page
    */
   size_t calculate_block_size() const;
 
-  /**
+  /*!
    * \brief Returns the size of an individual page
    *
    * \return The size of the page
@@ -510,7 +585,7 @@ private:
 
   // Utilities
 
-  /**
+  /*!
    * \brief This function will call memset only if debug is on.
    *
    * \param object The object's block to sign
@@ -519,7 +594,7 @@ private:
    */
   void write_signature(GenericObject *object, const unsigned char pattern, size_t size);
 
-  /**
+  /*!
    * \brief This function will call memset only if debug is on.
    *
    * \param location The location to sign
@@ -528,7 +603,7 @@ private:
    */
   void write_signature(uint8_t *location, const unsigned char pattern, size_t size);
 
-  /**
+  /*!
    * \brief This will check whether the address is within the range of start and start + length
    *
    * \param start The start of the range
@@ -539,7 +614,7 @@ private:
    */
   bool is_in_range(uint8_t *start, size_t length, uint8_t *address) const;
 
-  /**
+  /*!
    * \brief This function will remove a node from the given linked list
    *
    * \param head The head of the list in which the node is in.
